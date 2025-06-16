@@ -28,7 +28,7 @@ resource "aws_guardduty_detector_feature" "this" {
     for feature in try(var.settings.features, []) : feature.name => feature
   }
   detector_id = aws_guardduty_detector.this[0].id
-  name        = each.valuename
+  name        = each.value.name
   status      = try(each.value.enabled, true) ? "ENABLED" : "DISABLED"
   dynamic "additional_configuration" {
     for_each = try(each.value.additional_configurations, [])
