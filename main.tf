@@ -15,7 +15,7 @@ resource "aws_organizations_delegated_administrator" "this" {
 
 resource "aws_guardduty_detector" "this" {
   count = (
-    (try(var.settings.organization.delegated, false) && var.is_hub) ||
+    (try(var.settings.organization.enabled, false) && var.is_hub) ||
     (!try(var.settings.organization.delegated, false) && !var.is_hub)
   ) ? 1 : 0
   enable                       = try(var.settings.enabled, true)
@@ -45,7 +45,6 @@ resource "aws_guardduty_organization_admin_account" "this" {
 }
 
 resource "aws_guardduty_organization_configuration" "this" {
-  depends_on                       = [aws_guardduty_organization_admin_account.this]
   count                            = try(var.settings.organization.enabled, false) ? 1 : 0
   auto_enable_organization_members = try(var.settings.organization.auto_enable, "ALL")
   detector_id                      = aws_guardduty_detector.this[0].id
