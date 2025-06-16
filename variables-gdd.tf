@@ -19,6 +19,7 @@
 #          enabled: true | false # Auto-enable setting for the additional configuration
 #  organization:
 #    delegated: true | false  # Whether to delegate Guard Duty management to the organization administrator account
+#    administrator_account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account, can be used only on the Organization Account
 #    account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account
 #    enabled: true | false  # Whether to enable Guard Duty for the organization.
 #    auto_enable: ALL | NONE | NEW # Auto-enable Guard Duty for new accounts in the organization

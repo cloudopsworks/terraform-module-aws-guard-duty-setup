@@ -8,8 +8,8 @@
 #
 
 resource "aws_organizations_delegated_administrator" "this" {
-  count             = try(var.settings.organization.delegated, false) && !var.is_hub ? 1 : 0
-  account_id        = var.settings.organization.account_id
+  count             = try(var.settings.organization.delegated, false) && try(var.settings.organization.administrator_account_id, "") != "" ? 1 : 0
+  account_id        = var.settings.organization.administrator_account_id
   service_principal = "guardduty.amazonaws.com"
 }
 
