@@ -119,7 +119,7 @@ data "aws_iam_policy_document" "publishing_destination_kms_key_policy" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${try(var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")}"
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${try(var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")}",
         "arm:aws:iam::${data.aws_caller_identity.current.account_id}:root"
       ]
     }
