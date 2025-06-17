@@ -120,6 +120,7 @@ data "aws_iam_policy_document" "publishing_destination_kms_key_policy" {
       type = "AWS"
       identifiers = [
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${try(var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")}"
+        "arm:aws:iam::${data.aws_caller_identity.current.account_id}:root"
       ]
     }
     actions = [
@@ -159,6 +160,6 @@ resource "aws_guardduty_publishing_destination" "publishing_destination" {
   kms_key_arn     = aws_kms_key.publishing_destination[0].arn
   depends_on = [
     module.publishing_destination,
-    aws_kms_key_policy.publishing_destination
+    aws_kms_key_policy.publishing_destination,
   ]
 }
