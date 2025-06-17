@@ -117,7 +117,6 @@ resource "aws_kms_key" "publishing_destination" {
   deletion_window_in_days = try(var.settings.publishing_destination.kms_key_deletion_window, 30)
   enable_key_rotation     = true
   is_enabled              = true
-  policy                  = data.aws_iam_policy_document.publishing_destination_kms_key_policy.json
   tags                    = local.all_tags
 }
 
