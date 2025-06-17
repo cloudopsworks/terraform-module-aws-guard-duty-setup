@@ -43,6 +43,7 @@
 #    enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
 #    kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
 #    kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
+#    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
 variable "settings" {
   description = "Settings for the Guard Duty configuration"
   type        = any

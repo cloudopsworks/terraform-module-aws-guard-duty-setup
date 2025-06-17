@@ -12,27 +12,47 @@ locals {
 }
 
 module "publishing_destination" {
-  source                                   = "terraform-aws-modules/s3-bucket/aws"
-  version                                  = "~> 4.10"
-  create_bucket                            = try(var.settings.publishing_destination.enabled, false)
-  bucket                                   = local.destination_bucket_name
-  acl                                      = "private"
-  force_destroy                            = false
-  control_object_ownership                 = true
-  object_ownership                         = "ObjectWriter"
-  attach_deny_incorrect_encryption_headers = true
-  attach_deny_insecure_transport_policy    = true
-  attach_require_latest_tls_policy         = true
-  attach_public_policy                     = true
-  attach_policy                            = true
-  policy                                   = data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json
-  block_public_acls                        = true
-  block_public_policy                      = true
-  ignore_public_acls                       = true
-  restrict_public_buckets                  = true
+  source                                    = "terraform-aws-modules/s3-bucket/aws"
+  version                                   = "~> 4.10"
+  create_bucket                             = try(var.settings.publishing_destination.enabled, false)
+  bucket                                    = local.destination_bucket_name
+  acl                                       = "private"
+  force_destroy                             = false
+  control_object_ownership                  = true
+  object_ownership                          = "ObjectWriter"
+  attach_deny_incorrect_encryption_headers  = true
+  attach_deny_insecure_transport_policy     = true
+  attach_deny_unencrypted_object_uploads    = true
+  attach_deny_ssec_encrypted_object_uploads = true
+  attach_require_latest_tls_policy          = true
+  attach_public_policy                      = true
+  attach_policy                             = true
+  policy                                    = data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json
+  block_public_acls                         = true
+  block_public_policy                       = true
+  ignore_public_acls                        = true
+  restrict_public_buckets                   = true
   versioning = {
     enabled = false
   }
+  allowed_kms_key_arn = aws_kms_key.publishing_destination[0].arn
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.publishing_destination[0].arn
+      }
+    }
+  }
+  lifecycle_rule = [
+    {
+      id      = "expire_findings"
+      enabled = true
+      expiration = {
+        days = try(var.settings.publishing_destination.expiration_days, 90)
+      }
+    }
+  ]
   tags = local.all_tags
 }
 
