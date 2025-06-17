@@ -29,7 +29,17 @@
 #        additional_configurations:
 #          - name: "org_config_name"  # Name of the additional configuration for the organization feature
 #            auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
-#
+#  malware_protection:
+#    plans: # (optional) List of malware protection plans
+#      - bucket_name: "my-malware-protection-bucket"  # S3 bucket name for malware protection
+#        object_prefixes: # (optional) List of object prefixes for the malware protection bucket
+#          - "prefix1"
+#          - "prefix2"
+#        tagging_enabled: true | false # (optional) Whether to enable tagging for the malware protection bucket, default is true
+#  publishing_destination:
+#    enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
+#    kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
+#    kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
 variable "settings" {
   description = "Settings for the Guard Duty configuration"
   type        = any
