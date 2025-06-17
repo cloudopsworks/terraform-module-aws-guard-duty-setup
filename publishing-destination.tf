@@ -123,7 +123,7 @@ resource "aws_kms_key" "publishing_destination" {
 resource "aws_kms_key_policy" "publishing_destination" {
   count  = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
   key_id = aws_kms_key.publishing_destination[0].id
-  policy = data.aws_iam_policy_document.publishing_destination_kms_key_policy.json
+  policy = data.aws_iam_policy_document.publishing_destination_kms_key_policy[0].json
 }
 
 resource "aws_kms_alias" "publishing_destination" {

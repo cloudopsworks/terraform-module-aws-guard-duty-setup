@@ -36,6 +36,9 @@
 #          - "prefix1"
 #          - "prefix2"
 #        tagging_enabled: true | false # (optional) Whether to enable tagging for the malware protection bucket, default is true
+#        bucket_kms_key_id: "ae853tgjvgyuu43" # (optional) KMS key ID for the malware protection bucket, default is null
+#        bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
+#        bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
 #  publishing_destination:
 #    enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
 #    kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"

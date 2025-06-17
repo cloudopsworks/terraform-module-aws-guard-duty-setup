@@ -65,21 +65,3 @@ resource "aws_guardduty_organization_configuration_feature" "this" {
     }
   }
 }
-
-resource "aws_guardduty_malware_protection_plan" "this" {
-  for_each = {
-    for plan in try(var.settings.malware_protection.plans, []) : plan.bucket_name => plan
-  }
-  actions {
-    tagging {
-      status = try(each.value.tagging_enabled, true) ? "ENABLED" : "DISABLED"
-    }
-  }
-  protected_resource {
-    s3_bucket {
-      bucket_name     = each.value.bucket_name
-      object_prefixes = try(each.value.object_prefixes, [])
-    }
-  }
-  tags = local.all_tags
-}
