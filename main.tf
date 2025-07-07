@@ -7,12 +7,6 @@
 #     Distributed Under Apache v2.0 License
 #
 
-resource "aws_organizations_delegated_administrator" "this" {
-  count             = try(var.settings.organization.delegated, false) && try(var.settings.organization.administrator_account_id, "") != "" ? 1 : 0
-  account_id        = var.settings.organization.administrator_account_id
-  service_principal = "guardduty.amazonaws.com"
-}
-
 resource "aws_guardduty_detector" "this" {
   count = (
     (try(var.settings.organization.enabled, false) && var.is_hub) ||
@@ -40,7 +34,7 @@ resource "aws_guardduty_detector_feature" "this" {
 }
 
 resource "aws_guardduty_organization_admin_account" "this" {
-  count            = try(var.settings.organization.delegated, false) && !var.is_hub ? 1 : 0
+  count             = try(var.settings.organization.delegated, false) && try(var.settings.organization.administrator_account_id, "") != "" ? 1 : 0
   admin_account_id = var.settings.organization.account_id
 }
 
