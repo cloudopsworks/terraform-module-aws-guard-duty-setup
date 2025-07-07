@@ -13,7 +13,7 @@ locals {
 
 module "publishing_destination" {
   source                                    = "terraform-aws-modules/s3-bucket/aws"
-  version                                   = "~> 4.10"
+  version                                   = "~> 5.00"
   create_bucket                             = try(var.settings.publishing_destination.enabled, false)
   bucket                                    = local.destination_bucket_name
   acl                                       = "private"
