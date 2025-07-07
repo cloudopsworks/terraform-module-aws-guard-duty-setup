@@ -11,20 +11,134 @@ copyrights:
 github_repo: cloudopsworks/terraform-module-aws-guard-duty-setup
 
 description: |-
-  VPC Module for setting up transit gateway with ResourceAccessMananger support.
+  AWS GuardDuty setup module that provides organization-wide threat detection monitoring. 
+  Supports delegated administration, publishing destinations, and feature configurations.
+  Includes S3 bucket setup for findings with KMS encryption and lifecycle management.
 
 # Introduction to the project
 introduction: |-
-#  This is an introduction.
+  This module enables AWS GuardDuty across your AWS organization with support for:
+  - Organization-wide deployment with delegated administration
+  - Customizable detector features and configurations
+  - Secure findings storage in S3 with KMS encryption
+  - Automated member account enrollment
+  - Publishing destination setup for centralized logging
 
 # How to use this project
 usage: |-
+  ```hcl
+  # terragrunt.hcl
+  include "root" {
+    path = find_in_parent_folders()
+  }
+
+  terraform {
+    source = "git::https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup.git?ref=v1.0.0"
+  }
+
+  inputs = {
+    settings = {
+      enabled = true
+      organization = {
+        enabled = true
+        delegated = true
+        administrator_account_id = "123456789012"
+        auto_enable = "ALL"
+      }
+      publishing_destination = {
+        enabled = true
+        expiration_days = 90
+      }
+    }
+  }
+  ```
+  ### Module inputs
+  ```yaml
+  settings:
+    enabled: true | false  # Whether to enable Guard Duty
+    finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
+    features:
+      - name: "feature_name"  # Name of the feature
+        enabled: true | false  # Whether the feature is enabled
+        additional_configurations:
+          - name: "config_name"  # Name of the additional configuration
+            enabled: true | false # Auto-enable setting for the additional configuration
+    organization:
+      delegated: true | false  # Whether to delegate Guard Duty management to the organization administrator account
+      administrator_account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account, can be used only on the Organization Account
+      account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account
+      enabled: true | false  # Whether to enable Guard Duty for the organization.
+      auto_enable: ALL | NONE | NEW # Auto-enable Guard Duty for new accounts in the organization
+      features:
+        - name: "org_feature_name"  # Name of the organization feature
+          auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
+          additional_configurations:
+            - name: "org_config_name"  # Name of the additional configuration for the organization feature
+              auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
+    malware_protection:
+      plans: # (optional) List of malware protection plans
+        - bucket_name: "my-malware-protection-bucket"  # S3 bucket name for malware protection
+          object_prefixes: # (optional) List of object prefixes for the malware protection bucket
+            - "prefix1"
+            - "prefix2"
+          tagging_enabled: true | false # (optional) Whether to enable tagging for the malware protection bucket, default is true
+          bucket_kms_key_id: "ae853tgjvgyuu43" # (optional) KMS key ID for the malware protection bucket, default is null
+          bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
+          bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
+    publishing_destination:
+      enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
+      kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
+      kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
+      expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+  ```
+
 
 # Example usage
 examples: |-
+  ## Basic Setup
+  ```hcl
+  module "guard_duty" {
+    source = "cloudopsworks/guard-duty-setup/aws"
+
+    settings = {
+      enabled = true
+    }
+  }
+  ```
+
+  ## Organization Setup with Delegated Admin
+  ```hcl
+  module "guard_duty" {
+    source = "cloudopsworks/guard-duty-setup/aws"
+
+    settings = {
+      enabled = true
+      organization = {
+        enabled = true
+        delegated = true
+        administrator_account_id = "123456789012"
+      }
+    }
+  }
+  ```
 
 # How to get started quickly
 quickstart: |-
+  1. Add the module to your terragrunt.hcl:
+     ```hcl
+     terraform {
+       source = "git::https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup.git?ref=v1.0.0"
+     }
+     ```
+  2. Configure basic settings:
+     ```hcl
+     inputs = {
+       settings = {
+         enabled = true
+       }
+     }
+     ```
+  3. Run terragrunt init and apply
 
 include:
   - "docs/targets.md"
