@@ -27,7 +27,7 @@ module "publishing_destination" {
   attach_require_latest_tls_policy          = true
   attach_public_policy                      = true
   attach_policy                             = true
-  policy                                    = data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json
+  policy                                    = try(var.settings.publishing_destination.enabled, false) ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
   block_public_acls                         = true
   block_public_policy                       = true
   ignore_public_acls                        = true
