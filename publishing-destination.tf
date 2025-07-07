@@ -154,10 +154,10 @@ resource "aws_kms_alias" "publishing_destination" {
 }
 
 resource "aws_guardduty_publishing_destination" "publishing_destination" {
-  count           = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
-  destination_arn = module.publishing_destination.s3_bucket_arn
+  count           = try(var.settings.publishing_destination.enabled, false) || try(var.settings.publishing_destination.bucket_name, "") != "" ? 1 : 0
+  destination_arn = try(var.settings.publishing_destination.enabled, false) ? module.publishing_destination.s3_bucket_arn : format("arn:aws:s3:::%s", local.destination_bucket_name)
   detector_id     = aws_guardduty_detector.this[0].id
-  kms_key_arn     = aws_kms_key.publishing_destination[0].arn
+  kms_key_arn     = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : try(var.settings.publishing_destination.kms_key_arn, "")
   depends_on = [
     module.publishing_destination,
     aws_kms_key_policy.publishing_destination,
