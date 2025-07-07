@@ -7,10 +7,15 @@
 #     Distributed Under Apache v2.0 License
 #
 
+data "aws_guardduty_detector" "existing" {
+  count = try(var.settings.detector.enabled, true) ? 0 : 1
+}
+
 resource "aws_guardduty_detector" "this" {
   count = (
-    (try(var.settings.organization.enabled, false) && var.is_hub) ||
-    (!try(var.settings.organization.delegated, false) && !var.is_hub)
+    ((try(var.settings.organization.enabled, false) && var.is_hub) ||
+    (!try(var.settings.organization.delegated, false) && !var.is_hub)) &&
+    length(data.aws_guardduty_detector.existing) == 0
   ) ? 1 : 0
   enable                       = try(var.settings.enabled, true)
   finding_publishing_frequency = try(var.settings.finding_publishing_frequency, null)
@@ -21,7 +26,7 @@ resource "aws_guardduty_detector_feature" "this" {
   for_each = {
     for feature in try(var.settings.features, []) : feature.name => feature
   }
-  detector_id = aws_guardduty_detector.this[0].id
+  detector_id = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
   name        = each.value.name
   status      = try(each.value.enabled, true) ? "ENABLED" : "DISABLED"
   dynamic "additional_configuration" {
@@ -41,14 +46,14 @@ resource "aws_guardduty_organization_admin_account" "this" {
 resource "aws_guardduty_organization_configuration" "this" {
   count                            = try(var.settings.organization.enabled, false) ? 1 : 0
   auto_enable_organization_members = try(var.settings.organization.auto_enable, "ALL")
-  detector_id                      = aws_guardduty_detector.this[0].id
+  detector_id                      = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
 }
 
 resource "aws_guardduty_organization_configuration_feature" "this" {
   for_each = {
     for feature in try(var.settings.organization.features, []) : feature.name => feature
   }
-  detector_id = aws_guardduty_detector.this[0].id
+  detector_id = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
   name        = each.value.name
   auto_enable = try(each.value.auto_enable, "ALL")
   dynamic "additional_configuration" {
