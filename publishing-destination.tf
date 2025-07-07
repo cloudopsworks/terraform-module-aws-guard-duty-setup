@@ -27,7 +27,7 @@ module "publishing_destination" {
   attach_require_latest_tls_policy          = true
   attach_public_policy                      = true
   attach_policy                             = true
-  policy                                    = data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json
+  policy                                    = try(var.settings.publishing_destination.enabled, false) ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
   block_public_acls                         = true
   block_public_policy                       = true
   ignore_public_acls                        = true
@@ -35,12 +35,12 @@ module "publishing_destination" {
   versioning = {
     enabled = false
   }
-  allowed_kms_key_arn = aws_kms_key.publishing_destination[0].arn
+  allowed_kms_key_arn = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
   server_side_encryption_configuration = {
     rule = {
       apply_server_side_encryption_by_default = {
         sse_algorithm     = "aws:kms"
-        kms_master_key_id = aws_kms_key.publishing_destination[0].arn
+        kms_master_key_id = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
       }
     }
   }
