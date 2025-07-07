@@ -35,12 +35,12 @@ module "publishing_destination" {
   versioning = {
     enabled = false
   }
-  allowed_kms_key_arn = aws_kms_key.publishing_destination[0].arn
+  allowed_kms_key_arn = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
   server_side_encryption_configuration = {
     rule = {
       apply_server_side_encryption_by_default = {
         sse_algorithm     = "aws:kms"
-        kms_master_key_id = aws_kms_key.publishing_destination[0].arn
+        kms_master_key_id = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
       }
     }
   }
