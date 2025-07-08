@@ -8,9 +8,9 @@
 #
 
 locals {
-  snapshot_preservation = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
+  snapshot_preservation      = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
   scan_resource_criteria_obj = try(var.settings.malware_protection.scan_criteria, {})
-  scan_resource_criteria = length(local.scan_resource_criteria_obj) > 0 ?  "--scan-resource-criteria ${jsonencode(local.scan_resource_criteria_obj)}" : ""
+  scan_resource_criteria     = length(local.scan_resource_criteria_obj) > 0 ? "--scan-resource-criteria ${jsonencode(local.scan_resource_criteria_obj)}" : ""
 }
 
 data "aws_guardduty_detector" "existing" {
