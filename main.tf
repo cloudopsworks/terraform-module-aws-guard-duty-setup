@@ -10,7 +10,10 @@
 locals {
   snapshot_preservation      = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
   scan_resource_criteria_obj = try(var.settings.malware_protection.scan_criteria, {})
-  scan_resource_criteria     = length(local.scan_resource_criteria_obj) > 0 ? "--scan-resource-criteria ${jsonencode(local.scan_resource_criteria_obj)}" : ""
+  scan_resource_criteria = length(local.scan_resource_criteria_obj) > 0 ? {
+    SCAN_PARAM = "--scan-resource-criteria"
+    SCAN_VALUE = jsonencode(local.scan_resource_criteria_obj)
+  } : {}
 }
 
 data "aws_guardduty_detector" "existing" {
@@ -26,6 +29,15 @@ resource "aws_guardduty_detector" "this" {
   enable                       = try(var.settings.enabled, true)
   finding_publishing_frequency = try(var.settings.finding_publishing_frequency, null)
   tags                         = local.all_tags
+
+  provisioner "local-exec" {
+    command = "aws guardduty update-malware-scan-settings --detector-id ${self.id} --ebs-snapshot-preservation $PRESERVATION $SCAN_PARAM $SCAN_VALUE"
+    environment = {
+      PRESERVATION = local.snapshot_preservation
+      SCAN_PARAM   = lookup(local.scan_resource_criteria, "SCAN_PARAM", "")
+      SCAN_VALUE   = lookup(local.scan_resource_criteria, "SCAN_VALUE", "")
+    }
+  }
 }
 
 resource "aws_guardduty_detector_feature" "this" {
@@ -68,10 +80,6 @@ resource "aws_guardduty_organization_configuration_feature" "this" {
       name        = additional_configuration.value.name
       auto_enable = try(additional_configuration.value.auto_enable, "ALL")
     }
-  }
-
-  provisioner "local-exec" {
-    command = "aws guardduty update-malware-scan-settings --detector-id ${self.detector_id} --ebs-snapshot-preservation '${local.snapshot_preservation}' ${local.scan_resource_criteria}"
   }
 }
 
