@@ -9,13 +9,13 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.100.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.2.0 |
 
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 4.10 |
+| <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 5.00 |
 | <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.9 |
 
 ## Resources
@@ -24,6 +24,7 @@
 |------|------|
 | [aws_guardduty_detector.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector) | resource |
 | [aws_guardduty_detector_feature.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector_feature) | resource |
+| [aws_guardduty_filter.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_filter) | resource |
 | [aws_guardduty_malware_protection_plan.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_malware_protection_plan) | resource |
 | [aws_guardduty_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_organization_admin_account) | resource |
 | [aws_guardduty_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_organization_configuration) | resource |
@@ -35,8 +36,8 @@
 | [aws_kms_alias.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_alias) | resource |
 | [aws_kms_key.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key) | resource |
 | [aws_kms_key_policy.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key_policy) | resource |
-| [aws_organizations_delegated_administrator.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_delegated_administrator) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_guardduty_detector.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/guardduty_detector) | data source |
 | [aws_iam_policy_document.malware_protection_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.malware_protection_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
@@ -57,4 +58,9 @@
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | n/a |
+| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | n/a |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | n/a |
+| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | n/a |
