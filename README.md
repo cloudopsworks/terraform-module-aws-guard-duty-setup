@@ -97,6 +97,19 @@ inputs = {
 settings:
   enabled: true | false  # Whether to enable Guard Duty
   finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
+  malware_protection: # (optional) Malware protection settings
+    ebs_snapshot_preservation: true | false  # Whether to preserve EBS snapshots for malware protection
+    scan_criteria:
+      Include:
+        EC2_INSTANCE_TAG:
+          MapEquals: # (optional) List of tags to include in the scan criteria
+            - Key: "tag_key"  # Tag key to include in the scan criteria
+              Value: "tag_value"  # Tag value to include in the scan criteria
+      Exclude:
+        EC2_INSTANCE_TAG:
+          MapEquals: # (optional) List of tags to include in the scan criteria
+            - Key: "tag_key"  # Tag key to include in the scan criteria
+              Value: "tag_value"  # Tag value to include in the scan criteria
   features:
     - name: "feature_name"  # Name of the feature
       enabled: true | false  # Whether the feature is enabled
@@ -130,6 +143,19 @@ settings:
     kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
     kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
     expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+  filters: # (optional) List of filters for Guard Duty findings
+    <filter_name>:
+      action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"
+      description: "Filter description"  # Description of the filter
+      rank: 0  # Rank of the filter, lower numbers are higher priority
+      criteria_list: # List of criteria for the filter
+        - field: "field_name"  # Field to filter on
+          equals: ["value1", "value2"]  # Values to match for the field
+          not_equals: ["value3", "value4"]  # Values to exclude for the field
+          greater_than: 10 | <date> # (optional) Greater than value for numeric fields
+          less_than: 100 | <date> # (optional) Less than value for numeric fields
+          greater_than_or_equal: 10 | <date> # (optional) Greater than or equal value for numeric fields
+          less_than_or_equal: 100 | <date> # (optional) Less than or equal value for numeric fields
 ```
 
 ## Quick Start
@@ -204,13 +230,13 @@ Available targets:
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.100.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.2.0 |
 
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 4.10 |
+| <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 5.00 |
 | <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.9 |
 
 ## Resources
@@ -219,6 +245,7 @@ Available targets:
 |------|------|
 | [aws_guardduty_detector.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector) | resource |
 | [aws_guardduty_detector_feature.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector_feature) | resource |
+| [aws_guardduty_filter.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_filter) | resource |
 | [aws_guardduty_malware_protection_plan.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_malware_protection_plan) | resource |
 | [aws_guardduty_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_organization_admin_account) | resource |
 | [aws_guardduty_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_organization_configuration) | resource |
@@ -230,8 +257,8 @@ Available targets:
 | [aws_kms_alias.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_alias) | resource |
 | [aws_kms_key.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key) | resource |
 | [aws_kms_key_policy.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key_policy) | resource |
-| [aws_organizations_delegated_administrator.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_delegated_administrator) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_guardduty_detector.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/guardduty_detector) | data source |
 | [aws_iam_policy_document.malware_protection_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.malware_protection_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
@@ -252,7 +279,12 @@ Available targets:
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | n/a |
+| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | n/a |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | n/a |
+| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | n/a |
 
 
 

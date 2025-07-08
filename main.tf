@@ -7,6 +7,12 @@
 #     Distributed Under Apache v2.0 License
 #
 
+locals {
+  snapshot_preservation = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
+  scan_resource_criteria_obj = try(var.settings.malware_protection.scan_criteria, {})
+  scan_resource_criteria = length(local.scan_resource_criteria_obj) > 0 ?  "--scan-resource-criteria ${jsonencode(local.scan_resource_criteria_obj)}" : ""
+}
+
 data "aws_guardduty_detector" "existing" {
   count = try(var.settings.detector.enabled, true) ? 0 : 1
 }
@@ -63,4 +69,32 @@ resource "aws_guardduty_organization_configuration_feature" "this" {
       auto_enable = try(additional_configuration.value.auto_enable, "ALL")
     }
   }
+
+  provisioner "local-exec" {
+    command = "aws guardduty update-malware-scan-settings --detector-id ${self.detector_id} --ebs-snapshot-preservation '${local.snapshot_preservation}' ${local.scan_resource_criteria}"
+  }
+}
+
+resource "aws_guardduty_filter" "this" {
+  for_each    = try(var.settings.filters, {})
+  name        = format("%s-%s", each.key, local.system_name_short)
+  description = try(each.value.description, "Filter for Guard Duty findings - ${each.key}")
+  detector_id = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
+  action      = try(each.value.action, "ARCHIVE")
+  rank        = try(each.value.rank, 0)
+  finding_criteria {
+    dynamic "criterion" {
+      for_each = try(each.value.criteria_list, [])
+      content {
+        field                 = criterion.value.field
+        equals                = try(criterion.value.equals, null)
+        not_equals            = try(criterion.value.not_equals, null)
+        greater_than          = try(criterion.value.greater_than, null)
+        less_than             = try(criterion.value.less_than, null)
+        greater_than_or_equal = try(criterion.value.greater_than_or_equal, null)
+        less_than_or_equal    = try(criterion.value.less_than_or_equal, null)
+      }
+    }
+  }
+  tags = local.all_tags
 }
