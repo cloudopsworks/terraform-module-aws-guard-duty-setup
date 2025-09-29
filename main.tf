@@ -20,6 +20,16 @@ data "aws_guardduty_detector" "existing" {
   count = try(var.settings.detector.enabled, true) ? 0 : 1
 }
 
+resource "aws_ec2_tag" "existing_detector" {
+  for_each = {
+    for k, v in local.all_tags : k => v
+    if length(data.aws_guardduty_detector.existing) > 0
+  }
+  resource_id = data.aws_guardduty_detector.existing[0].id
+  key         = each.key
+  value       = each.value
+}
+
 resource "aws_guardduty_detector" "this" {
   count = (
     ((try(var.settings.organization.enabled, false) && var.is_hub) ||
