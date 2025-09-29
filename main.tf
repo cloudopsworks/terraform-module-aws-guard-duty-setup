@@ -38,6 +38,7 @@ resource "aws_guardduty_detector" "this" {
       SCAN_VALUE   = lookup(local.scan_resource_criteria, "SCAN_VALUE", "")
     }
   }
+  tags = local.all_tags
 }
 
 resource "aws_guardduty_detector_feature" "this" {
