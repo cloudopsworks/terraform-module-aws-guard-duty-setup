@@ -14,17 +14,25 @@ locals {
     SCAN_PARAM = "--scan-resource-criteria"
     SCAN_VALUE = jsonencode(local.scan_resource_criteria_obj)
   } : {}
+  detectors = {
+    for detector in data.aws_guardduty_detector.existing : detector.id => detector
+  }
 }
 
 data "aws_guardduty_detector" "existing" {
   count = try(var.settings.detector.enabled, true) ? 0 : 1
 }
 
+import {
+  for_each = local.detectors
+  id       = each.key
+  to       = aws_guardduty_detector.this[0]
+}
+
 resource "aws_guardduty_detector" "this" {
   count = (
     ((try(var.settings.organization.enabled, false) && var.is_hub) ||
-    (!try(var.settings.organization.delegated, false) && !var.is_hub)) &&
-    length(data.aws_guardduty_detector.existing) == 0
+    (!try(var.settings.organization.delegated, false) && !var.is_hub))
   ) ? 1 : 0
   enable                       = try(var.settings.enabled, true)
   finding_publishing_frequency = try(var.settings.finding_publishing_frequency, null)
