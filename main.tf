@@ -25,7 +25,7 @@ import {
     for detector in data.aws_guardduty_detector.existing: detector.id => detector
   }
   id = aws_guardduty_detector.this[0]
-  to = data.aws_guardduty_detector.existing[0]
+  to = each.key
 }
 
 resource "aws_guardduty_detector" "this" {
