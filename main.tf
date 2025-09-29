@@ -14,6 +14,9 @@ locals {
     SCAN_PARAM = "--scan-resource-criteria"
     SCAN_VALUE = jsonencode(local.scan_resource_criteria_obj)
   } : {}
+  detectors = {
+    for detector in data.aws_guardduty_detector.existing : detector.id => detector
+  }
 }
 
 data "aws_guardduty_detector" "existing" {
@@ -21,11 +24,9 @@ data "aws_guardduty_detector" "existing" {
 }
 
 import {
-  for_each = {
-    for detector in data.aws_guardduty_detector.existing: detector.id => detector
-  }
-  id = aws_guardduty_detector.this[0]
-  to = each.key
+  for_each = local.detectors
+  id       = each.key
+  to       = aws_guardduty_detector.this[0]
 }
 
 resource "aws_guardduty_detector" "this" {
