@@ -32,8 +32,7 @@ import {
 resource "aws_guardduty_detector" "this" {
   count = (
     ((try(var.settings.organization.enabled, false) && var.is_hub) ||
-    (!try(var.settings.organization.delegated, false) && !var.is_hub)) &&
-    length(data.aws_guardduty_detector.existing) == 0
+    (!try(var.settings.organization.delegated, false) && !var.is_hub))
   ) ? 1 : 0
   enable                       = try(var.settings.enabled, true)
   finding_publishing_frequency = try(var.settings.finding_publishing_frequency, null)
