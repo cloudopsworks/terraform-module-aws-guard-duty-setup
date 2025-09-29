@@ -25,7 +25,7 @@ resource "aws_ec2_tag" "existing_detector" {
     for k, v in local.all_tags : k => v
     if length(data.aws_guardduty_detector.existing) > 0
   }
-  resource_id = data.aws_guardduty_detector.existing[0].id
+  resource_id = data.aws_guardduty_detector.existing[0].arn
   key         = each.key
   value       = each.value
 }
