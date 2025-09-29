@@ -20,14 +20,12 @@ data "aws_guardduty_detector" "existing" {
   count = try(var.settings.detector.enabled, true) ? 0 : 1
 }
 
-resource "aws_ec2_tag" "existing_detector" {
+import {
   for_each = {
-    for k, v in local.all_tags : k => v
-    if length(data.aws_guardduty_detector.existing) > 0
+    for detector in data.aws_guardduty_detector.existing: detector.id => detector
   }
-  resource_id = data.aws_guardduty_detector.existing[0].arn
-  key         = each.key
-  value       = each.value
+  id = aws_guardduty_detector.this[0]
+  to = data.aws_guardduty_detector.existing[0]
 }
 
 resource "aws_guardduty_detector" "this" {
