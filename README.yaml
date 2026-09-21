@@ -123,8 +123,8 @@ usage: |-
       enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
       bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
       expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
-      encryption: # (optional) KMS settings for the publishing destination. GuardDuty always requires a KMS key for S3 export.
-        enabled: true | false  # (optional) Create a module-managed KMS key, default is true. When false, kms_key_arn is required.
+      encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
+        enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn must be set.
         kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
         deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
         rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
