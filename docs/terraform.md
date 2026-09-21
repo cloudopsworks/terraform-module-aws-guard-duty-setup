@@ -1,27 +1,27 @@
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.4 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.4 |
+| ---- | ------- |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.65.0 |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 5.00 |
-| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.9 |
+| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.10 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_guardduty_detector.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector) | resource |
 | [aws_guardduty_detector_feature.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector_feature) | resource |
 | [aws_guardduty_filter.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_filter) | resource |
@@ -48,7 +48,7 @@
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | Extra tags to add to the resources | `map(string)` | `{}` | no |
 | <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Is this a hub or spoke configuration? | `bool` | `false` | no |
 | <a name="input_org"></a> [org](#input\_org) | Organization details | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
@@ -58,8 +58,9 @@
 ## Outputs
 
 | Name | Description |
-|------|-------------|
-| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | n/a |
-| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | n/a |
-| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | n/a |
-| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | n/a |
+| ---- | ----------- |
+| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | ARN of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
+| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | Name of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn, null when no publishing destination is configured |
+| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | ID of the module-managed KMS key for the publishing destination, null when the key is not managed by this module |
+| <a name="output_publishing_destination_kms_key_managed"></a> [publishing\_destination\_kms\_key\_managed](#output\_publishing\_destination\_kms\_key\_managed) | Whether the publishing destination KMS key is created and managed by this module |

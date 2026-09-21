@@ -13,7 +13,7 @@ github_repo: cloudopsworks/terraform-module-aws-guard-duty-setup
 description: |-
   AWS GuardDuty setup module that provides organization-wide threat detection monitoring. 
   Supports delegated administration, publishing destinations, and feature configurations.
-  Includes S3 bucket setup for findings with KMS encryption and lifecycle management.
+  Includes S3 bucket setup for findings with KMS encryption (module-managed or bring-your-own key) and lifecycle management.
 
 # Introduction to the project
 introduction: |-
@@ -48,10 +48,31 @@ usage: |-
       publishing_destination = {
         enabled = true
         expiration_days = 90
+        encryption = {
+          enabled              = true   # module-managed KMS key (default)
+          rotation_enabled     = true
+          rotation_period_days = 180    # 90 day minimum
+          deletion_window_days = 30
+          admin_role           = "terraform-access-role"
+        }
       }
     }
   }
   ```
+
+  ### Publishing destination encryption
+  GuardDuty requires a KMS key to export findings to S3, so the publishing destination is always
+  KMS-encrypted. What is optional is whether this module creates and manages that key:
+
+  | `encryption.enabled` | Behaviour |
+  |----------------------|-----------|
+  | `true` (default)     | The module creates a customer-managed KMS key, its alias and key policy (GuardDuty `GenerateDataKey*` + `admin_role` full access), and uses it for both the bucket SSE and the publishing destination. |
+  | `false`              | No key is created. `encryption.kms_key_arn` must point to an existing key whose policy already allows `guardduty.amazonaws.com` to `kms:GenerateDataKey*`. |
+
+  The flat `kms_key_admin_role`, `kms_key_deletion_window` and `kms_key_arn` keys are **deprecated** in favour of
+  the `encryption` block. They are still honoured as fallbacks when the corresponding `encryption.*` key is absent,
+  so existing deployments keep working unchanged.
+
   ### Module inputs
   ```yaml
   settings:
@@ -99,10 +120,22 @@ usage: |-
           bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
           bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
     publishing_destination:
-      enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
-      kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
-      kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
+      enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
+      bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
       expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+      encryption: # (optional) KMS settings for the publishing destination. GuardDuty always requires a KMS key for S3 export.
+        enabled: true | false  # (optional) Create a module-managed KMS key, default is true. When false, kms_key_arn is required.
+        kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
+        deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
+        rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
+        rotation_period_days: 365 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 365
+        multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
+        admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
+        alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
+        description: "KMS key for GuardDuty publishing destination" # (optional) KMS key description
+      kms_key_admin_role: "terraform-access-role" # (deprecated) Use encryption.admin_role instead, default is "terraform-access-role"
+      kms_key_deletion_window: 30 # (deprecated) Use encryption.deletion_window_days instead, default is 30
+      kms_key_arn: "arn:aws:kms:..." # (deprecated) Use encryption.kms_key_arn instead, default is ""
     filters: # (optional) List of filters for Guard Duty findings
       <filter_name>:
         action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"

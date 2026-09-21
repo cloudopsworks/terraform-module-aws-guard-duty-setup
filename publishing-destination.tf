@@ -1,5 +1,5 @@
 ##
-# (c) 2021-2025
+# (c) 2021-2026
 #     Cloud Ops Works LLC - https://cloudops.works/
 #     Find us on:
 #       GitHub: https://github.com/cloudopsworks
@@ -8,13 +8,26 @@
 #
 
 locals {
-  destination_bucket_name = format("guard-duty-findings-%s", local.system_name)
+  destination_bucket_name        = format("guard-duty-findings-%s", local.system_name)
+  publishing_destination_enabled = try(var.settings.publishing_destination.enabled, false)
+  # Normalized KMS settings live under settings.publishing_destination.encryption.
+  # The legacy flat keys (kms_key_admin_role, kms_key_deletion_window, kms_key_arn) are
+  # deprecated but still honored as fallbacks so existing deployments keep working.
+  publishing_destination_encryption          = try(var.settings.publishing_destination.encryption, {})
+  publishing_destination_kms_managed         = local.publishing_destination_enabled && try(local.publishing_destination_encryption.enabled, true)
+  publishing_destination_kms_external_arn    = try(local.publishing_destination_encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "")
+  publishing_destination_kms_deletion_window = try(local.publishing_destination_encryption.deletion_window_days, var.settings.publishing_destination.kms_key_deletion_window, 30)
+  publishing_destination_kms_admin_role      = try(local.publishing_destination_encryption.admin_role, var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")
+  publishing_destination_kms_rotation        = try(local.publishing_destination_encryption.rotation_enabled, true)
+  publishing_destination_kms_rotation_period = local.publishing_destination_kms_rotation ? try(local.publishing_destination_encryption.rotation_period_days, 365) : null
+  publishing_destination_kms_alias           = try(local.publishing_destination_encryption.alias, format("alias/guardduty-pd-%s", local.system_name_short))
+  publishing_destination_kms_key_arn         = local.publishing_destination_kms_managed ? aws_kms_key.publishing_destination[0].arn : local.publishing_destination_kms_external_arn
 }
 
 module "publishing_destination" {
   source                                    = "terraform-aws-modules/s3-bucket/aws"
   version                                   = "~> 5.00"
-  create_bucket                             = try(var.settings.publishing_destination.enabled, false)
+  create_bucket                             = local.publishing_destination_enabled
   bucket                                    = local.destination_bucket_name
   acl                                       = "private"
   force_destroy                             = false
@@ -27,7 +40,7 @@ module "publishing_destination" {
   attach_require_latest_tls_policy          = true
   attach_public_policy                      = true
   attach_policy                             = true
-  policy                                    = try(var.settings.publishing_destination.enabled, false) ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
+  policy                                    = local.publishing_destination_enabled ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
   block_public_acls                         = true
   block_public_policy                       = true
   ignore_public_acls                        = true
@@ -35,12 +48,12 @@ module "publishing_destination" {
   versioning = {
     enabled = false
   }
-  allowed_kms_key_arn = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
+  allowed_kms_key_arn = local.publishing_destination_enabled ? local.publishing_destination_kms_key_arn : null
   server_side_encryption_configuration = {
     rule = {
       apply_server_side_encryption_by_default = {
         sse_algorithm     = "aws:kms"
-        kms_master_key_id = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : null
+        kms_master_key_id = local.publishing_destination_enabled ? local.publishing_destination_kms_key_arn : null
       }
     }
   }
@@ -57,7 +70,7 @@ module "publishing_destination" {
 }
 
 data "aws_iam_policy_document" "publishing_destination_bucket_policy" {
-  count = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
+  count = local.publishing_destination_enabled ? 1 : 0
   statement {
     sid = "AllowPutObject"
     actions = [
@@ -96,7 +109,7 @@ data "aws_iam_policy_document" "publishing_destination_bucket_policy" {
 }
 
 data "aws_iam_policy_document" "publishing_destination_kms_key_policy" {
-  count = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
+  count = local.publishing_destination_kms_managed ? 1 : 0
   statement {
     sid    = "AllowGuardDutyUseOfKMSKey"
     effect = "Allow"
@@ -119,7 +132,7 @@ data "aws_iam_policy_document" "publishing_destination_kms_key_policy" {
     principals {
       type = "AWS"
       identifiers = [
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${try(var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")}",
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.publishing_destination_kms_admin_role}",
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
       ]
     }
@@ -133,31 +146,33 @@ data "aws_iam_policy_document" "publishing_destination_kms_key_policy" {
 }
 
 resource "aws_kms_key" "publishing_destination" {
-  count                   = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
-  description             = "KMS key for GuardDuty publishing destination"
-  deletion_window_in_days = try(var.settings.publishing_destination.kms_key_deletion_window, 30)
-  enable_key_rotation     = true
+  count                   = local.publishing_destination_kms_managed ? 1 : 0
+  description             = try(local.publishing_destination_encryption.description, "KMS key for GuardDuty publishing destination")
+  deletion_window_in_days = local.publishing_destination_kms_deletion_window
+  enable_key_rotation     = local.publishing_destination_kms_rotation
+  rotation_period_in_days = local.publishing_destination_kms_rotation_period
+  multi_region            = try(local.publishing_destination_encryption.multi_region, false)
   is_enabled              = true
   tags                    = local.all_tags
 }
 
 resource "aws_kms_key_policy" "publishing_destination" {
-  count  = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
+  count  = local.publishing_destination_kms_managed ? 1 : 0
   key_id = aws_kms_key.publishing_destination[0].id
   policy = data.aws_iam_policy_document.publishing_destination_kms_key_policy[0].json
 }
 
 resource "aws_kms_alias" "publishing_destination" {
-  count         = try(var.settings.publishing_destination.enabled, false) ? 1 : 0
+  count         = local.publishing_destination_kms_managed ? 1 : 0
   target_key_id = aws_kms_key.publishing_destination[0].id
-  name          = format("alias/guardduty-pd-%s", local.system_name_short)
+  name          = local.publishing_destination_kms_alias
 }
 
 resource "aws_guardduty_publishing_destination" "publishing_destination" {
-  count           = try(var.settings.publishing_destination.enabled, false) || try(var.settings.publishing_destination.bucket_name, "") != "" ? 1 : 0
-  destination_arn = try(var.settings.publishing_destination.enabled, false) ? module.publishing_destination.s3_bucket_arn : format("arn:aws:s3:::%s", var.settings.publishing_destination.bucket_name)
+  count           = local.publishing_destination_enabled || try(var.settings.publishing_destination.bucket_name, "") != "" ? 1 : 0
+  destination_arn = local.publishing_destination_enabled ? module.publishing_destination.s3_bucket_arn : format("arn:aws:s3:::%s", var.settings.publishing_destination.bucket_name)
   detector_id     = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
-  kms_key_arn     = try(var.settings.publishing_destination.enabled, false) ? aws_kms_key.publishing_destination[0].arn : try(var.settings.publishing_destination.kms_key_arn, "")
+  kms_key_arn     = local.publishing_destination_kms_key_arn
   depends_on = [
     module.publishing_destination,
     aws_kms_key_policy.publishing_destination,

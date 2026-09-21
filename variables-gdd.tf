@@ -1,5 +1,5 @@
 ##
-# (c) 2021-2025
+# (c) 2021-2026
 #     Cloud Ops Works LLC - https://cloudops.works/
 #     Find us on:
 #       GitHub: https://github.com/cloudopsworks
@@ -53,10 +53,22 @@
 #        bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
 #        bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
 #  publishing_destination:
-#    enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
-#    kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
-#    kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
+#    enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
+#    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
 #    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+#    encryption: # (optional) KMS settings for the publishing destination. GuardDuty always requires a KMS key for S3 export.
+#      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. When false, kms_key_arn is required.
+#      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
+#      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
+#      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
+#      rotation_period_days: 365 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 365
+#      multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
+#      admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
+#      alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
+#      description: "KMS key for GuardDuty publishing destination" # (optional) KMS key description
+#    kms_key_admin_role: "terraform-access-role" # (deprecated) Use encryption.admin_role instead, default is "terraform-access-role"
+#    kms_key_deletion_window: 30 # (deprecated) Use encryption.deletion_window_days instead, default is 30
+#    kms_key_arn: "arn:aws:kms:..." # (deprecated) Use encryption.kms_key_arn instead, default is ""
 #  filters: # (optional) List of filters for Guard Duty findings
 #    <filter_name>:
 #      action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"
@@ -74,4 +86,32 @@ variable "settings" {
   description = "Settings for the Guard Duty configuration"
   type        = any
   default     = {}
+
+  validation {
+    condition = (
+      !try(var.settings.publishing_destination.enabled, false) ||
+      try(var.settings.publishing_destination.encryption.enabled, true) ||
+      try(var.settings.publishing_destination.encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "") != ""
+    )
+    error_message = "settings.publishing_destination.encryption.kms_key_arn is required when settings.publishing_destination.enabled is true and settings.publishing_destination.encryption.enabled is false, GuardDuty requires a KMS key to export findings to S3."
+  }
+
+  validation {
+    condition = (
+      !try(var.settings.publishing_destination.encryption.rotation_enabled, true) ||
+      (
+        try(var.settings.publishing_destination.encryption.rotation_period_days, 365) >= 90 &&
+        try(var.settings.publishing_destination.encryption.rotation_period_days, 365) <= 2560
+      )
+    )
+    error_message = "settings.publishing_destination.encryption.rotation_period_days must be between 90 and 2560 days."
+  }
+
+  validation {
+    condition = (
+      try(var.settings.publishing_destination.encryption.deletion_window_days, var.settings.publishing_destination.kms_key_deletion_window, 30) >= 7 &&
+      try(var.settings.publishing_destination.encryption.deletion_window_days, var.settings.publishing_destination.kms_key_deletion_window, 30) <= 30
+    )
+    error_message = "settings.publishing_destination.encryption.deletion_window_days (or the deprecated kms_key_deletion_window) must be between 7 and 30 days."
+  }
 }
