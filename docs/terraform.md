@@ -43,6 +43,7 @@
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_kms_key_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_kms_key.publishing_destination_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
@@ -59,8 +60,8 @@
 
 | Name | Description |
 | ---- | ----------- |
-| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | ARN of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
-| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | Name of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
-| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn, null when no publishing destination is configured |
+| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | ARN of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing\_destination.enabled nor retain\_bucket is true |
+| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | Name of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing\_destination.enabled nor retain\_bucket is true |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn or kms\_key\_alias, null when no publishing destination is configured |
 | <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | ID of the module-managed KMS key for the publishing destination, null when the key is not managed by this module |
 | <a name="output_publishing_destination_kms_key_managed"></a> [publishing\_destination\_kms\_key\_managed](#output\_publishing\_destination\_kms\_key\_managed) | Whether the publishing destination KMS key is created and managed by this module |
