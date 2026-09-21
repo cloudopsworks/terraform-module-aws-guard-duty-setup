@@ -19,7 +19,7 @@ locals {
   publishing_destination_kms_deletion_window = try(local.publishing_destination_encryption.deletion_window_days, var.settings.publishing_destination.kms_key_deletion_window, 30)
   publishing_destination_kms_admin_role      = try(local.publishing_destination_encryption.admin_role, var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")
   publishing_destination_kms_rotation        = try(local.publishing_destination_encryption.rotation_enabled, true)
-  publishing_destination_kms_rotation_period = local.publishing_destination_kms_rotation ? try(local.publishing_destination_encryption.rotation_period_days, 365) : null
+  publishing_destination_kms_rotation_period = local.publishing_destination_kms_rotation ? try(local.publishing_destination_encryption.rotation_period_days, 90) : null
   publishing_destination_kms_alias           = try(local.publishing_destination_encryption.alias, format("alias/guardduty-pd-%s", local.system_name_short))
   publishing_destination_kms_key_arn         = local.publishing_destination_kms_managed ? aws_kms_key.publishing_destination[0].arn : local.publishing_destination_kms_external_arn
 }

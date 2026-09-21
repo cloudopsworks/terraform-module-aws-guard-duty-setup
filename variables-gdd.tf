@@ -61,7 +61,7 @@
 #      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
 #      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
 #      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
-#      rotation_period_days: 365 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 365
+#      rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
 #      multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
 #      admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
 #      alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
@@ -100,8 +100,8 @@ variable "settings" {
     condition = (
       !try(var.settings.publishing_destination.encryption.rotation_enabled, true) ||
       (
-        try(var.settings.publishing_destination.encryption.rotation_period_days, 365) >= 90 &&
-        try(var.settings.publishing_destination.encryption.rotation_period_days, 365) <= 2560
+        try(var.settings.publishing_destination.encryption.rotation_period_days, 90) >= 90 &&
+        try(var.settings.publishing_destination.encryption.rotation_period_days, 90) <= 2560
       )
     )
     error_message = "settings.publishing_destination.encryption.rotation_period_days must be between 90 and 2560 days."
