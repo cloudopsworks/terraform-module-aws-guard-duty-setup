@@ -23,7 +23,7 @@ output "publishing_destination_kms_key_id" {
 }
 
 output "publishing_destination_kms_key_arn" {
-  description = "ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms_key_arn, null when no publishing destination is configured"
+  description = "ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms_key_arn or kms_key_alias, null when no publishing destination is configured"
   value       = local.publishing_destination_kms_key_arn != "" ? local.publishing_destination_kms_key_arn : null
 }
 

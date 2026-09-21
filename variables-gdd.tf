@@ -57,8 +57,9 @@
 #    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
 #    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
 #    encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
-#      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn must be set.
-#      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
+#      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
+#      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias
+#      kms_key_alias: "my-findings-key" # (optional) Existing KMS key alias resolved to its ARN, accepted with or without the "alias/" prefix, default is ""
 #      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
 #      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
 #      rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
@@ -91,9 +92,10 @@ variable "settings" {
     condition = (
       !try(var.settings.publishing_destination.enabled, false) ||
       try(var.settings.publishing_destination.encryption.enabled, true) ||
-      try(var.settings.publishing_destination.encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "") != ""
+      try(var.settings.publishing_destination.encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "") != "" ||
+      try(var.settings.publishing_destination.encryption.kms_key_alias, "") != ""
     )
-    error_message = "settings.publishing_destination.encryption.kms_key_arn is required when settings.publishing_destination.enabled is true and settings.publishing_destination.encryption.enabled is false, GuardDuty requires a KMS key to export findings to S3."
+    error_message = "settings.publishing_destination.encryption.kms_key_arn or kms_key_alias is required when settings.publishing_destination.enabled is true and settings.publishing_destination.encryption.enabled is false, GuardDuty requires a KMS key to export findings to S3."
   }
 
   validation {

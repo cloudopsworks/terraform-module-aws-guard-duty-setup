@@ -13,9 +13,17 @@ locals {
   # Normalized KMS settings live under settings.publishing_destination.encryption.
   # The legacy flat keys (kms_key_admin_role, kms_key_deletion_window, kms_key_arn) are
   # deprecated but still honored as fallbacks so existing deployments keep working.
-  publishing_destination_encryption          = try(var.settings.publishing_destination.encryption, {})
-  publishing_destination_kms_managed         = local.publishing_destination_enabled && try(local.publishing_destination_encryption.enabled, true)
-  publishing_destination_kms_external_arn    = try(local.publishing_destination_encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "")
+  publishing_destination_encryption         = try(var.settings.publishing_destination.encryption, {})
+  publishing_destination_kms_managed        = local.publishing_destination_enabled && try(local.publishing_destination_encryption.enabled, true)
+  publishing_destination_kms_external_alias = try(local.publishing_destination_encryption.kms_key_alias, "")
+  # Accept the alias with or without the "alias/" prefix, KMS lookups need the prefixed form.
+  publishing_destination_kms_external_alias_name = local.publishing_destination_kms_external_alias == "" ? "" : (
+    startswith(local.publishing_destination_kms_external_alias, "alias/") ? local.publishing_destination_kms_external_alias : format("alias/%s", local.publishing_destination_kms_external_alias)
+  )
+  publishing_destination_kms_external_arn_input = try(local.publishing_destination_encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "")
+  publishing_destination_kms_lookup_alias       = !local.publishing_destination_kms_managed && local.publishing_destination_kms_external_arn_input == "" && local.publishing_destination_kms_external_alias_name != ""
+  # An explicit ARN wins over an alias, the alias is resolved through a data lookup.
+  publishing_destination_kms_external_arn    = local.publishing_destination_kms_lookup_alias ? data.aws_kms_key.publishing_destination_external[0].arn : local.publishing_destination_kms_external_arn_input
   publishing_destination_kms_deletion_window = try(local.publishing_destination_encryption.deletion_window_days, var.settings.publishing_destination.kms_key_deletion_window, 30)
   publishing_destination_kms_admin_role      = try(local.publishing_destination_encryption.admin_role, var.settings.publishing_destination.kms_key_admin_role, "terraform-access-role")
   publishing_destination_kms_rotation        = try(local.publishing_destination_encryption.rotation_enabled, true)
@@ -67,6 +75,11 @@ module "publishing_destination" {
     }
   ]
   tags = local.all_tags
+}
+
+data "aws_kms_key" "publishing_destination_external" {
+  count  = local.publishing_destination_kms_lookup_alias ? 1 : 0
+  key_id = local.publishing_destination_kms_external_alias_name
 }
 
 data "aws_iam_policy_document" "publishing_destination_bucket_policy" {

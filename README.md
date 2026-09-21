@@ -102,7 +102,7 @@ KMS-encrypted. What is optional is whether this module creates and manages that 
 | `encryption.enabled` | Behaviour |
 |----------------------|-----------|
 | `true` (default)     | The module creates a customer-managed KMS key, its alias and key policy (GuardDuty `GenerateDataKey*` + `admin_role` full access), and uses it for both the bucket SSE and the publishing destination. |
-| `false`              | No key is created. `encryption.kms_key_arn` must point to an existing key whose policy already allows `guardduty.amazonaws.com` to `kms:GenerateDataKey*`. |
+| `false`              | No key is created. `encryption.kms_key_arn` (or `encryption.kms_key_alias`, with or without the `alias/` prefix) must point to an existing key whose policy already allows `guardduty.amazonaws.com` to `kms:GenerateDataKey*`. |
 
 The flat `kms_key_admin_role`, `kms_key_deletion_window` and `kms_key_arn` keys are **deprecated** in favour of
 the `encryption` block. They are still honoured as fallbacks when the corresponding `encryption.*` key is absent,
@@ -159,8 +159,9 @@ settings:
     bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
     expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
     encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
-      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn must be set.
-      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is ""
+      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
+      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias
+      kms_key_alias: "my-findings-key" # (optional) Existing KMS key alias resolved to its ARN, accepted with or without the "alias/" prefix, default is ""
       deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
       rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
       rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
@@ -293,6 +294,7 @@ Available targets:
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_kms_key_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_kms_key.publishing_destination_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
@@ -311,7 +313,7 @@ Available targets:
 | ---- | ----------- |
 | <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | ARN of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
 | <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | Name of the module-managed S3 bucket that receives GuardDuty findings, null when publishing\_destination.enabled is false |
-| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn, null when no publishing destination is configured |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn or kms\_key\_alias, null when no publishing destination is configured |
 | <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | ID of the module-managed KMS key for the publishing destination, null when the key is not managed by this module |
 | <a name="output_publishing_destination_kms_key_managed"></a> [publishing\_destination\_kms\_key\_managed](#output\_publishing\_destination\_kms\_key\_managed) | Whether the publishing destination KMS key is created and managed by this module |
 
