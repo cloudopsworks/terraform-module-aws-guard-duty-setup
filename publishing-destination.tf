@@ -10,11 +10,15 @@
 locals {
   destination_bucket_name        = format("guard-duty-findings-%s", local.system_name)
   publishing_destination_enabled = try(var.settings.publishing_destination.enabled, false)
+  # retain_bucket keeps the findings bucket (and its managed KMS key) when the publishing
+  # destination is switched off, so already exported findings stay readable.
+  publishing_destination_retain_bucket = try(var.settings.publishing_destination.retain_bucket, false)
+  publishing_destination_bucket_create = local.publishing_destination_enabled || local.publishing_destination_retain_bucket
   # Normalized KMS settings live under settings.publishing_destination.encryption.
   # The legacy flat keys (kms_key_admin_role, kms_key_deletion_window, kms_key_arn) are
   # deprecated but still honored as fallbacks so existing deployments keep working.
   publishing_destination_encryption         = try(var.settings.publishing_destination.encryption, {})
-  publishing_destination_kms_managed        = local.publishing_destination_enabled && try(local.publishing_destination_encryption.enabled, true)
+  publishing_destination_kms_managed        = local.publishing_destination_bucket_create && try(local.publishing_destination_encryption.enabled, true)
   publishing_destination_kms_external_alias = try(local.publishing_destination_encryption.kms_key_alias, "")
   # Accept the alias with or without the "alias/" prefix, KMS lookups need the prefixed form.
   publishing_destination_kms_external_alias_name = local.publishing_destination_kms_external_alias == "" ? "" : (
@@ -35,10 +39,10 @@ locals {
 module "publishing_destination" {
   source                                    = "terraform-aws-modules/s3-bucket/aws"
   version                                   = "~> 5.00"
-  create_bucket                             = local.publishing_destination_enabled
+  create_bucket                             = local.publishing_destination_bucket_create
   bucket                                    = local.destination_bucket_name
   acl                                       = "private"
-  force_destroy                             = false
+  force_destroy                             = try(var.settings.publishing_destination.force_destroy, false)
   control_object_ownership                  = true
   object_ownership                          = "ObjectWriter"
   attach_deny_incorrect_encryption_headers  = true
@@ -48,7 +52,7 @@ module "publishing_destination" {
   attach_require_latest_tls_policy          = true
   attach_public_policy                      = true
   attach_policy                             = true
-  policy                                    = local.publishing_destination_enabled ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
+  policy                                    = local.publishing_destination_bucket_create ? data.aws_iam_policy_document.publishing_destination_bucket_policy[0].json : ""
   block_public_acls                         = true
   block_public_policy                       = true
   ignore_public_acls                        = true
@@ -56,12 +60,15 @@ module "publishing_destination" {
   versioning = {
     enabled = false
   }
-  allowed_kms_key_arn = local.publishing_destination_enabled ? local.publishing_destination_kms_key_arn : null
+  allowed_kms_key_arn = local.publishing_destination_kms_key_arn != "" ? local.publishing_destination_kms_key_arn : null
+  # A retained bucket without any KMS key falls back to SSE-S3.
   server_side_encryption_configuration = {
     rule = {
-      apply_server_side_encryption_by_default = {
+      apply_server_side_encryption_by_default = local.publishing_destination_kms_key_arn != "" ? {
         sse_algorithm     = "aws:kms"
-        kms_master_key_id = local.publishing_destination_enabled ? local.publishing_destination_kms_key_arn : null
+        kms_master_key_id = local.publishing_destination_kms_key_arn
+        } : {
+        sse_algorithm = "AES256"
       }
     }
   }
@@ -83,7 +90,7 @@ data "aws_kms_key" "publishing_destination_external" {
 }
 
 data "aws_iam_policy_document" "publishing_destination_bucket_policy" {
-  count = local.publishing_destination_enabled ? 1 : 0
+  count = local.publishing_destination_bucket_create ? 1 : 0
   statement {
     sid = "AllowPutObject"
     actions = [

@@ -56,6 +56,8 @@
 #    enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
 #    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
 #    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+#    retain_bucket: true | false # (optional) Keep the findings bucket and its managed KMS key when enabled is switched to false, default is false
+#    force_destroy: true | false # (optional) Allow Terraform to delete the findings bucket even when it still contains objects, default is false
 #    encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
 #      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
 #      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias

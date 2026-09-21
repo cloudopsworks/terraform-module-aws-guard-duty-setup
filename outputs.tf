@@ -8,13 +8,13 @@
 #
 
 output "publishing_destination_bucket_name" {
-  description = "Name of the module-managed S3 bucket that receives GuardDuty findings, null when publishing_destination.enabled is false"
-  value       = local.publishing_destination_enabled ? module.publishing_destination.s3_bucket_id : null
+  description = "Name of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing_destination.enabled nor retain_bucket is true"
+  value       = local.publishing_destination_bucket_create ? module.publishing_destination.s3_bucket_id : null
 }
 
 output "publishing_destination_bucket_arn" {
-  description = "ARN of the module-managed S3 bucket that receives GuardDuty findings, null when publishing_destination.enabled is false"
-  value       = local.publishing_destination_enabled ? module.publishing_destination.s3_bucket_arn : null
+  description = "ARN of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing_destination.enabled nor retain_bucket is true"
+  value       = local.publishing_destination_bucket_create ? module.publishing_destination.s3_bucket_arn : null
 }
 
 output "publishing_destination_kms_key_id" {
