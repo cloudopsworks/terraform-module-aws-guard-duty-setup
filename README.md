@@ -17,7 +17,7 @@
 
 AWS GuardDuty setup module that provides organization-wide threat detection monitoring. 
 Supports delegated administration, publishing destinations, and feature configurations.
-Includes S3 bucket setup for findings with KMS encryption and lifecycle management.
+Includes S3 bucket setup for findings with KMS encryption (module-managed or bring-your-own key) and lifecycle management.
 
 
 ---
@@ -83,10 +83,38 @@ inputs = {
     publishing_destination = {
       enabled = true
       expiration_days = 90
+      encryption = {
+        enabled              = true   # module-managed KMS key (default)
+        rotation_enabled     = true
+        rotation_period_days = 90     # 90 day minimum (default)
+        deletion_window_days = 30
+        admin_role           = "terraform-access-role"
+      }
     }
   }
 }
 ```
+
+### Publishing destination encryption
+GuardDuty requires a KMS key to export findings to S3, so the publishing destination is always
+KMS-encrypted. What is optional is whether this module creates and manages that key:
+
+| `encryption.enabled` | Behaviour |
+|----------------------|-----------|
+| `true` (default)     | The module creates a customer-managed KMS key, its alias and key policy (GuardDuty `GenerateDataKey*` + `admin_role` full access), and uses it for both the bucket SSE and the publishing destination. |
+| `false`              | No key is created. `encryption.kms_key_arn` (or `encryption.kms_key_alias`, with or without the `alias/` prefix) must point to an existing key whose policy already allows `guardduty.amazonaws.com` to `kms:GenerateDataKey*`. |
+
+### Findings bucket retention
+Switching `publishing_destination.enabled` to `false` removes the GuardDuty publishing destination **and**
+destroys the findings bucket together with its managed KMS key. Set `retain_bucket: true` to keep the bucket,
+its policy and the KMS key so already exported findings remain readable after the destination is removed.
+`force_destroy` stays `false` by default, so a bucket that still holds findings is never deleted by
+Terraform unless explicitly allowed.
+
+The flat `kms_key_admin_role`, `kms_key_deletion_window` and `kms_key_arn` keys are **deprecated** in favour of
+the `encryption` block. They are still honoured as fallbacks when the corresponding `encryption.*` key is absent,
+so existing deployments keep working unchanged.
+
 ### Module inputs
 ```yaml
 settings:
@@ -134,10 +162,25 @@ settings:
         bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
         bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
   publishing_destination:
-    enabled: true | false  # Whether to enable publishing destination for Guard Duty findings
-    kms_key_admin_role: "terraform-access-role" # IAM role for KMS key administration, default is "terraform-access-role"
-    kms_key_deletion_window: 30 # KMS key deletion window in days, default is 30
+    enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
+    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
     expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
+    retain_bucket: true | false # (optional) Keep the findings bucket and its managed KMS key when enabled is switched to false, default is false
+    force_destroy: true | false # (optional) Allow Terraform to delete the findings bucket even when it still contains objects, default is false
+    encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
+      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
+      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias
+      kms_key_alias: "my-findings-key" # (optional) Existing KMS key alias resolved to its ARN, accepted with or without the "alias/" prefix, default is ""
+      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
+      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
+      rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
+      multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
+      admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
+      alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
+      description: "KMS key for GuardDuty publishing destination" # (optional) KMS key description
+    kms_key_admin_role: "terraform-access-role" # (deprecated) Use encryption.admin_role instead, default is "terraform-access-role"
+    kms_key_deletion_window: 30 # (deprecated) Use encryption.deletion_window_days instead, default is 30
+    kms_key_arn: "arn:aws:kms:..." # (deprecated) Use encryption.kms_key_arn instead, default is ""
   filters: # (optional) List of filters for Guard Duty findings
     <filter_name>:
       action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"
@@ -218,27 +261,27 @@ Available targets:
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.4 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.4 |
+| ---- | ------- |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.65.0 |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_publishing_destination"></a> [publishing\_destination](#module\_publishing\_destination) | terraform-aws-modules/s3-bucket/aws | ~> 5.00 |
-| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.9 |
+| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.10 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_guardduty_detector.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector) | resource |
 | [aws_guardduty_detector_feature.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_detector_feature) | resource |
 | [aws_guardduty_filter.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/guardduty_filter) | resource |
@@ -260,12 +303,13 @@ Available targets:
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_kms_key_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_kms_key.publishing_destination_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | Extra tags to add to the resources | `map(string)` | `{}` | no |
 | <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Is this a hub or spoke configuration? | `bool` | `false` | no |
 | <a name="input_org"></a> [org](#input\_org) | Organization details | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
@@ -275,11 +319,12 @@ Available targets:
 ## Outputs
 
 | Name | Description |
-|------|-------------|
-| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | n/a |
-| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | n/a |
-| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | n/a |
-| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | n/a |
+| ---- | ----------- |
+| <a name="output_publishing_destination_bucket_arn"></a> [publishing\_destination\_bucket\_arn](#output\_publishing\_destination\_bucket\_arn) | ARN of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing\_destination.enabled nor retain\_bucket is true |
+| <a name="output_publishing_destination_bucket_name"></a> [publishing\_destination\_bucket\_name](#output\_publishing\_destination\_bucket\_name) | Name of the module-managed S3 bucket that receives GuardDuty findings, null when neither publishing\_destination.enabled nor retain\_bucket is true |
+| <a name="output_publishing_destination_kms_key_arn"></a> [publishing\_destination\_kms\_key\_arn](#output\_publishing\_destination\_kms\_key\_arn) | ARN of the KMS key used by the publishing destination, module-managed or externally supplied via encryption.kms\_key\_arn or kms\_key\_alias, null when no publishing destination is configured |
+| <a name="output_publishing_destination_kms_key_id"></a> [publishing\_destination\_kms\_key\_id](#output\_publishing\_destination\_kms\_key\_id) | ID of the module-managed KMS key for the publishing destination, null when the key is not managed by this module |
+| <a name="output_publishing_destination_kms_key_managed"></a> [publishing\_destination\_kms\_key\_managed](#output\_publishing\_destination\_kms\_key\_managed) | Whether the publishing destination KMS key is created and managed by this module |
 
 
 
