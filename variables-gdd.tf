@@ -9,84 +9,87 @@
 
 ## settings as yaml Entries:
 #settings:
-#  enabled: true | false  # Whether to enable Guard Duty
-#  finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
-#  malware_protection: # (optional) EBS malware scan settings of the detector, applied through the AWS CLI only when ebs_snapshot_preservation or scan_criteria is set
-#    ebs_snapshot_preservation: true | false  # (optional) true -> RETENTION_WITH_FINDING, false -> NO_RETENTION, default is unset (settings left untouched)
-#    scan_criteria: # (optional) EC2 tag criteria that select the instances to scan, default is {}. Removing it later does not clear criteria already applied.
-#      Include:
-#        EC2_INSTANCE_TAG:
-#          MapEquals: # (optional) List of tags to include in the scan criteria
-#            - Key: "tag_key"  # Tag key to include in the scan criteria
-#              Value: "tag_value"  # Tag value to include in the scan criteria
-#      Exclude:
-#        EC2_INSTANCE_TAG:
-#          MapEquals: # (optional) List of tags to include in the scan criteria
-#            - Key: "tag_key"  # Tag key to include in the scan criteria
-#              Value: "tag_value"  # Tag value to include in the scan criteria
-#  features: # (optional) Detector features for THIS account. When omitted and organization.enabled is true, they are inherited from organization.features
-#             #   (auto_enable ALL/NEW -> ENABLED, NONE -> DISABLED), because organization auto-enable never applies to the delegated administrator itself.
-#             #   Set features: [] to opt out of the inheritance.
-#    - name: "feature_name"  # Name of the feature
-#      enabled: true | false  # Whether the feature is enabled
-#      additional_configurations:
-#        - name: "config_name"  # Name of the additional configuration
-#          enabled: true | false # Auto-enable setting for the additional configuration
-#  organization:
-#    delegated: true | false  # Whether to delegate Guard Duty management to the organization administrator account
-#    administrator_account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account, can be used only on the Organization Account
-#    account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account
-#    enabled: true | false  # Whether to enable Guard Duty for the organization.
-#    auto_enable: ALL | NONE | NEW # Auto-enable Guard Duty for new accounts in the organization
-#    features: # (optional) Auto-enable settings for MEMBER accounts; also inherited by the administrator detector when settings.features is omitted
-#      - name: "org_feature_name"  # Name of the organization feature
-#        auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
-#        additional_configurations:
-#          - name: "org_config_name"  # Name of the additional configuration for the organization feature
-#            auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
-#  malware_protection:
-#    plans: # (optional) List of malware protection plans
-#      - bucket_name: "my-malware-protection-bucket"  # S3 bucket name for malware protection
-#        object_prefixes: # (optional) List of object prefixes for the malware protection bucket
-#          - "prefix1"
-#          - "prefix2"
-#        tagging_enabled: true | false # (optional) Whether to enable tagging for the malware protection bucket, default is true
-#        bucket_kms_key_id: "ae853tgjvgyuu43" # (optional) KMS key ID for the malware protection bucket, default is null
-#        bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
-#        bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
-#  publishing_destination:
-#    enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
-#    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
-#    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
-#    retain_bucket: true | false # (optional) Keep the findings bucket and its managed KMS key when enabled is switched to false, default is false
-#    force_destroy: true | false # (optional) Allow Terraform to delete the findings bucket even when it still contains objects, default is false
-#    encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
-#      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
-#      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias
-#      kms_key_alias: "my-findings-key" # (optional) Existing KMS key alias resolved to its ARN, accepted with or without the "alias/" prefix, default is ""
-#      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
-#      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
-#      rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
-#      multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
-#      admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
-#      alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
-#      description: "KMS key for GuardDuty publishing destination" # (optional) KMS key description
-#    kms_key_admin_role: "terraform-access-role" # (deprecated) Use encryption.admin_role instead, default is "terraform-access-role"
-#    kms_key_deletion_window: 30 # (deprecated) Use encryption.deletion_window_days instead, default is 30
-#    kms_key_arn: "arn:aws:kms:..." # (deprecated) Use encryption.kms_key_arn instead, default is ""
-#  filters: # (optional) List of filters for Guard Duty findings
-#    <filter_name>:
-#      action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"
-#      description: "Filter description"  # Description of the filter
-#      rank: 0  # Rank of the filter, lower numbers are higher priority
-#      criteria_list: # List of criteria for the filter
-#        - field: "field_name"  # Field to filter on
-#          equals: ["value1", "value2"]  # Values to match for the field
-#          not_equals: ["value3", "value4"]  # Values to exclude for the field
-#          greater_than: 10 | <date> # (optional) Greater than value for numeric fields
-#          less_than: 100 | <date> # (optional) Less than value for numeric fields
-#          greater_than_or_equal: 10 | <date> # (optional) Greater than or equal value for numeric fields
-#          less_than_or_equal: 100 | <date> # (optional) Less than or equal value for numeric fields
+#  enabled: true                                 # (Optional) Enable the GuardDuty detector. Default: true.
+#  finding_publishing_frequency: "SIX_HOURS"     # (Optional) Valid values: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS". Default: AWS default ("SIX_HOURS").
+#  detector:                                     # (Optional) Detector ownership. Default: {}.
+#    enabled: true                               # (Optional) true: the module creates the detector. false: the detector already in this account/region is looked up and imported,
+#                                                #   e.g. the one AWS auto-creates when the account is designated delegated administrator. Default: true.
+#  features:                                     # (Optional) Detector features of THIS account. When omitted and organization.enabled is true, they are inherited from
+#                                                #   organization.features (auto_enable ALL/NEW -> ENABLED, NONE -> DISABLED), because organization auto-enable never
+#                                                #   reaches the delegated administrator itself. Set "features: []" to opt out of the inheritance. Default: inherited or [].
+#    - name: "RUNTIME_MONITORING"                # (Required) Valid values (AWS API): "S3_DATA_EVENTS" | "EKS_AUDIT_LOGS" | "EBS_MALWARE_PROTECTION" | "RDS_LOGIN_EVENTS" |
+#                                                #   "EKS_RUNTIME_MONITORING" | "LAMBDA_NETWORK_LOGS" | "RUNTIME_MONITORING" | "AI_PROTECTION".
+#      enabled: true                             # (Optional) true -> ENABLED, false -> DISABLED. Default: true.
+#      additional_configurations:                # (Optional) Only for EKS_RUNTIME_MONITORING / RUNTIME_MONITORING. Default: [].
+#        - name: "EKS_ADDON_MANAGEMENT"          # (Required) Valid values: "EKS_ADDON_MANAGEMENT" | "ECS_FARGATE_AGENT_MANAGEMENT" | "EC2_AGENT_MANAGEMENT".
+#          enabled: true                         # (Optional) true -> ENABLED, false -> DISABLED. Default: true.
+#  organization:                                 # (Optional) AWS Organizations integration. Default: {} (disabled).
+#    delegated: false                            # (Optional) Organizations management account only: designate administrator_account_id as the GuardDuty
+#                                                #   delegated administrator. The module manages no detector in that account. Default: false.
+#    administrator_account_id: "123456789012"    # (Optional) 12-digit account ID of the delegated administrator, required when delegated is true. Default: "".
+#    enabled: false                              # (Optional) Delegated administrator account only (is_hub: true): manage the organization configuration. Default: false.
+#    auto_enable: "ALL"                          # (Optional) Enrolment of member accounts. Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+#    features:                                   # (Optional) Protection plans auto-enabled for MEMBER accounts, also inherited by the administrator detector when
+#                                                #   settings.features is omitted. Default: [].
+#      - name: "RUNTIME_MONITORING"              # (Required) Same valid values as settings.features[].name.
+#        auto_enable: "ALL"                      # (Optional) Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+#        additional_configurations:              # (Optional) Default: [].
+#          - name: "EKS_ADDON_MANAGEMENT"        # (Required) Valid values: "EKS_ADDON_MANAGEMENT" | "ECS_FARGATE_AGENT_MANAGEMENT" | "EC2_AGENT_MANAGEMENT".
+#            auto_enable: "ALL"                  # (Optional) Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+#  malware_protection:                           # (Optional) Malware Protection settings. Default: {}.
+#    ebs_snapshot_preservation: false            # (Optional) EBS malware scan setting of the detector, true -> RETENTION_WITH_FINDING, false -> NO_RETENTION.
+#                                                #   Applied through the AWS CLI (see "EBS malware scan settings"). Default: unset, left untouched in AWS.
+#    scan_criteria:                              # (Optional) EC2 instances selected for EBS malware scans, applied through the AWS CLI. Default: {}, left untouched in AWS.
+#                                                #   Removing it later does not clear criteria already applied.
+#      Include:                                  # (Optional) Scan only instances matching these tags.
+#        EC2_INSTANCE_TAG:                       # (Required) Only valid key: "EC2_INSTANCE_TAG".
+#          MapEquals:                            # (Required) Tag conditions.
+#            - Key: "Scan"                       # (Required) Tag key, 1-128 chars, must not start with "aws:".
+#              Value: "true"                     # (Optional) Tag value, when omitted only the key is matched.
+#      Exclude:                                  # (Optional) Skip instances matching these tags.
+#        EC2_INSTANCE_TAG:                       # (Required) Only valid key: "EC2_INSTANCE_TAG".
+#          MapEquals:                            # (Required) Tag conditions.
+#            - Key: "SkipMalwareScan"            # (Required) Tag key.
+#              Value: "true"                     # (Optional) Tag value.
+#    plans:                                      # (Optional) Malware Protection for S3 plans, one per bucket. Creates the "malware-prot-<system_name>-role" IAM role. Default: [].
+#      - bucket_name: "my-uploads-bucket"        # (Required) Existing S3 bucket to protect, also the key of the plan.
+#        object_prefixes:                        # (Optional) Scan only objects under these prefixes. Default: [] (whole bucket).
+#          - "incoming/"
+#        tagging_enabled: true                   # (Optional) Tag scanned objects with the scan result. Default: true.
+#        bucket_kms_key_id: "1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) KMS key ID when the bucket uses SSE-KMS, grants the role kms:Decrypt. Default: unset.
+#        bucket_kms_key_region: "us-east-1"      # (Optional) Region of bucket_kms_key_id. Default: current region.
+#        bucket_kms_key_account_id: "123456789012" # (Optional) Account of bucket_kms_key_id. Default: current account.
+#  publishing_destination:                       # (Optional) Export of findings to S3. Default: {} (no export).
+#    enabled: false                              # (Optional) Create the findings S3 bucket and register it as the publishing destination. Default: false.
+#    bucket_name: "existing-findings-bucket"     # (Optional) Publish to this existing bucket instead, used when enabled is false. Default: "".
+#    expiration_days: 90                         # (Optional) Days before exported findings expire in the managed bucket. Default: 90.
+#    retain_bucket: false                        # (Optional) Keep the bucket and its managed KMS key when enabled is switched to false. Default: false.
+#    force_destroy: false                        # (Optional) Allow Terraform to delete the bucket while it still holds objects. Default: false.
+#    encryption:                                 # (Optional) KMS settings. GuardDuty requires a KMS key to export findings to S3. Default: {}.
+#      enabled: true                             # (Optional) Create a module-managed KMS key. When false and a destination is configured, kms_key_arn or
+#                                                #   kms_key_alias is required (enforced by validation). Default: true.
+#      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) Existing key, used when enabled is false or
+#                                                #   when publishing to bucket_name. Takes precedence over kms_key_alias. Default: "".
+#      kms_key_alias: "my-findings-key"          # (Optional) Existing key alias resolved to its ARN, with or without the "alias/" prefix. Default: "".
+#      deletion_window_days: 30                  # (Optional) Managed key deletion window, valid values 7-30. Default: 30.
+#      rotation_enabled: true                    # (Optional) Automatic rotation of the managed key. Default: true.
+#      rotation_period_days: 90                  # (Optional) Rotation period, valid values 90-2560, used when rotation_enabled is true. Default: 90.
+#      multi_region: false                       # (Optional) Create the managed key as a multi-region primary key. Default: false.
+#      admin_role: "terraform-access-role"       # (Optional) IAM role name granted full administration of the managed key. Default: "terraform-access-role".
+#      alias: "alias/guardduty-pd-custom"        # (Optional) Alias of the managed key. Default: "alias/guardduty-pd-<system_name_short>".
+#      description: "KMS key for GuardDuty publishing destination" # (Optional) Description of the managed key. Default: as shown.
+#    kms_key_admin_role: "terraform-access-role" # (Deprecated) Use encryption.admin_role. Still honoured as a fallback.
+#    kms_key_deletion_window: 30                 # (Deprecated) Use encryption.deletion_window_days. Still honoured as a fallback.
+#    kms_key_arn: "arn:aws:kms:..."              # (Deprecated) Use encryption.kms_key_arn. Still honoured as a fallback.
+#  filters:                                      # (Optional) Findings filters, keyed by name. The filter name is "<key>-<system_name_short>". Default: {}.
+#    low-severity:
+#      action: "ARCHIVE"                         # (Optional) Valid values: "ARCHIVE" | "NOOP". Default: "ARCHIVE".
+#      description: "Archive low severity findings" # (Optional) Default: "Filter for Guard Duty findings - <key>".
+#      rank: 1                                   # (Optional) Order in which filters are applied, valid values 1-100. Default: 0, which AWS rejects, so set it.
+#      criteria_list:                            # (Required) Finding criteria, combined with AND.
+#        - field: "severity"                     # (Required) Finding attribute, e.g. "severity", "type", "resource.resourceType", "updatedAt".
+#          less_than: 4                          # (Optional) One or more of: equals | not_equals (lists of strings), greater_than | greater_than_or_equal |
+#                                                #   less_than | less_than_or_equal (number, or RFC 3339 date for date fields).
 variable "settings" {
   description = "Settings for the Guard Duty configuration"
   type        = any
