@@ -1,5 +1,5 @@
 ##
-# (c) 2021-2025
+# (c) 2021-2026
 #     Cloud Ops Works LLC - https://cloudops.works/
 #     Find us on:
 #       GitHub: https://github.com/cloudopsworks
@@ -8,13 +8,16 @@
 #
 
 locals {
-  snapshot_preservation  = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
+  ebs_snapshot_preservation = try(var.settings.malware_protection.ebs_snapshot_preservation, null)
+  snapshot_preservation = local.ebs_snapshot_preservation == null ? "" : (
+    local.ebs_snapshot_preservation ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
+  )
   scan_resource_criteria = try(var.settings.malware_protection.scan_criteria, {})
   # The AWS provider has no resource for UpdateMalwareScanSettings (hashicorp/terraform-provider-aws#33979),
-  # so the settings are applied through the AWS CLI, and only when the operator configures them.
+  # so the settings are applied through the AWS CLI, only when the operator configures them and a detector is in use.
   malware_scan_settings_enabled = (
-    try(var.settings.malware_protection.ebs_snapshot_preservation, null) != null ||
-    length(local.scan_resource_criteria) > 0
+    (local.snapshot_preservation != "" || length(local.scan_resource_criteria) > 0) &&
+    (length(aws_guardduty_detector.this) > 0 || !try(var.settings.detector.enabled, true))
   )
   detectors = {
     for detector in data.aws_guardduty_detector.existing : detector.id => detector
@@ -66,16 +69,19 @@ resource "terraform_data" "malware_scan_settings" {
     scan_resource_criteria = length(local.scan_resource_criteria) > 0 ? jsonencode(local.scan_resource_criteria) : ""
   }
 
+  # Only the settings the operator configured are passed, anything omitted is left untouched in AWS.
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/sh", "-c"]
+    command     = <<-EOT
       set -e
-      if [ -n "$SCAN_RESOURCE_CRITERIA" ]; then
-        aws guardduty update-malware-scan-settings --region "$REGION" --detector-id "$DETECTOR_ID" \
-          --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION" --scan-resource-criteria "$SCAN_RESOURCE_CRITERIA"
-      else
-        aws guardduty update-malware-scan-settings --region "$REGION" --detector-id "$DETECTOR_ID" \
-          --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION"
+      set -- --region "$REGION" --detector-id "$DETECTOR_ID"
+      if [ -n "$SNAPSHOT_PRESERVATION" ]; then
+        set -- "$@" --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION"
       fi
+      if [ -n "$SCAN_RESOURCE_CRITERIA" ]; then
+        set -- "$@" --scan-resource-criteria "$SCAN_RESOURCE_CRITERIA"
+      fi
+      aws guardduty update-malware-scan-settings "$@"
     EOT
     environment = {
       REGION                 = self.triggers_replace.region

@@ -125,7 +125,8 @@ applied with `aws guardduty update-malware-scan-settings` from a `terraform_data
 |--------|-----------|
 | When it runs | Only when `ebs_snapshot_preservation` or `scan_criteria` is set, on first apply and again whenever the detector, region or either value changes. |
 | Detector | The effective detector, module-created or adopted through `detector.enabled: false`, so it also covers the auto-created detector of the delegated administrator. |
-| Requirements | The AWS CLI v2 must be on the `PATH` of the machine running Terragrunt, with credentials for the **same account** the AWS provider targets. The region is passed explicitly. |
+| Settings passed | Only the keys that are set. `scan_criteria` alone leaves the snapshot preservation in AWS untouched, and the other way round. |
+| Requirements | A Unix-like runner (`/bin/sh`) with the AWS CLI v2 on the `PATH`, holding credentials for the **same account** the AWS provider targets. The region is passed explicitly. |
 | Failures | A CLI error fails the apply; nothing is ignored silently. |
 | Removal | Removing the keys stops managing the settings, it does not reset them in AWS. |
 
@@ -276,7 +277,7 @@ Available targets:
 
 | Name | Version |
 | ---- | ------- |
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.7 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
