@@ -59,6 +59,12 @@ resource "aws_guardduty_detector" "this" {
   tags                         = local.all_tags
 }
 
+# Resolves the IAM role behind the provider credentials (issuer_arn keeps the role path), so the CLI can run as it.
+data "aws_iam_session_context" "current" {
+  count = local.malware_scan_settings_enabled ? 1 : 0
+  arn   = data.aws_caller_identity.current.arn
+}
+
 # Runs against the effective detector (created or adopted) and re-runs whenever the settings change.
 resource "terraform_data" "malware_scan_settings" {
   count = local.malware_scan_settings_enabled ? 1 : 0
@@ -68,12 +74,40 @@ resource "terraform_data" "malware_scan_settings" {
     snapshot_preservation  = local.snapshot_preservation
     scan_resource_criteria = length(local.scan_resource_criteria) > 0 ? jsonencode(local.scan_resource_criteria) : ""
   }
+  # Provider identity, kept out of triggers_replace so a credential change alone does not re-run the CLI.
+  input = {
+    provider_arn      = data.aws_caller_identity.current.arn
+    provider_role_arn = data.aws_iam_session_context.current[0].issuer_name != "" ? data.aws_iam_session_context.current[0].issuer_arn : ""
+    provider_role_session_prefix = format("arn:%s:sts::%s:assumed-role/%s/",
+      split(":", data.aws_caller_identity.current.arn)[1],
+      data.aws_caller_identity.current.account_id,
+      data.aws_iam_session_context.current[0].issuer_name
+    )
+  }
 
+  # The AWS CLI runs outside the provider, with the shell's credentials. When those are not already the provider
+  # identity, the provider's role is assumed first, so an assume_role provider configuration is honoured.
   # Only the settings the operator configured are passed, anything omitted is left untouched in AWS.
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]
     command     = <<-EOT
       set -e
+      CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+      if [ "$CALLER_ARN" != "$PROVIDER_ARN" ]; then
+        case "$CALLER_ARN" in
+          "$PROVIDER_ROLE_SESSION_PREFIX"*) ;;
+          *)
+            if [ -z "$PROVIDER_ROLE_ARN" ]; then
+              echo "AWS CLI identity $CALLER_ARN differs from the provider identity $PROVIDER_ARN, which is not an assumed role." >&2
+              exit 1
+            fi
+            set -- $(aws sts assume-role --role-arn "$PROVIDER_ROLE_ARN" --role-session-name "$ROLE_SESSION_NAME" \
+              --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+            unset AWS_PROFILE AWS_DEFAULT_PROFILE
+            export AWS_ACCESS_KEY_ID="$1" AWS_SECRET_ACCESS_KEY="$2" AWS_SESSION_TOKEN="$3"
+            ;;
+        esac
+      fi
       set -- --region "$REGION" --detector-id "$DETECTOR_ID"
       if [ -n "$SNAPSHOT_PRESERVATION" ]; then
         set -- "$@" --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION"
@@ -84,10 +118,14 @@ resource "terraform_data" "malware_scan_settings" {
       aws guardduty update-malware-scan-settings "$@"
     EOT
     environment = {
-      REGION                 = self.triggers_replace.region
-      DETECTOR_ID            = self.triggers_replace.detector_id
-      SNAPSHOT_PRESERVATION  = self.triggers_replace.snapshot_preservation
-      SCAN_RESOURCE_CRITERIA = self.triggers_replace.scan_resource_criteria
+      REGION                       = self.triggers_replace.region
+      DETECTOR_ID                  = self.triggers_replace.detector_id
+      SNAPSHOT_PRESERVATION        = self.triggers_replace.snapshot_preservation
+      SCAN_RESOURCE_CRITERIA       = self.triggers_replace.scan_resource_criteria
+      PROVIDER_ARN                 = self.input.provider_arn
+      PROVIDER_ROLE_ARN            = self.input.provider_role_arn
+      PROVIDER_ROLE_SESSION_PREFIX = self.input.provider_role_session_prefix
+      ROLE_SESSION_NAME            = "guardduty-malware-scan-settings"
     }
   }
 }

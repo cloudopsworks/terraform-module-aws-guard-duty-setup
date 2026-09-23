@@ -126,7 +126,8 @@ applied with `aws guardduty update-malware-scan-settings` from a `terraform_data
 | When it runs | Only when `ebs_snapshot_preservation` or `scan_criteria` is set, on first apply and again whenever the detector, region or either value changes. |
 | Detector | The effective detector, module-created or adopted through `detector.enabled: false`, so it also covers the auto-created detector of the delegated administrator. |
 | Settings passed | Only the keys that are set. `scan_criteria` alone leaves the snapshot preservation in AWS untouched, and the other way round. |
-| Requirements | A Unix-like runner (`/bin/sh`) with the AWS CLI v2 on the `PATH`, holding credentials for the **same account** the AWS provider targets. The region is passed explicitly. |
+| Credentials | The CLI starts with the runner's ambient credentials. When they are not already the provider identity, it assumes the provider's role first (resolved with `aws_iam_session_context`, path included), so a Terragrunt `assume_role` provider block works as is. The ambient identity must be allowed to assume that role, which it already is when it is the one Terragrunt uses to assume it. `assume_role` settings beyond `role_arn` (external ID, session tags) are not replayed. |
+| Requirements | A Unix-like runner (`/bin/sh`) with the AWS CLI v2 on the `PATH`. The region is passed explicitly. |
 | Failures | A CLI error fails the apply; nothing is ignored silently. |
 | Removal | Removing the keys stops managing the settings, it does not reset them in AWS. |
 
@@ -320,6 +321,7 @@ Available targets:
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_kms_key_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_session_context.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_session_context) | data source |
 | [aws_kms_key.publishing_destination_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
