@@ -17,6 +17,21 @@ locals {
   detectors = {
     for detector in data.aws_guardduty_detector.existing : detector.id => detector
   }
+  # Organization auto-enable only reaches member accounts, never the delegated administrator itself.
+  # When settings.features is not set, the administrator detector inherits settings.organization.features.
+  organization_self_features = [
+    for feature in try(var.settings.organization.features, []) : {
+      name    = feature.name
+      enabled = try(feature.auto_enable, "ALL") != "NONE"
+      additional_configurations = [
+        for config in try(feature.additional_configurations, []) : {
+          name    = config.name
+          enabled = try(config.auto_enable, "ALL") != "NONE"
+        }
+      ]
+    } if try(var.settings.organization.enabled, false)
+  ]
+  detector_features = try(var.settings.features, local.organization_self_features)
 }
 
 data "aws_guardduty_detector" "existing" {
@@ -52,7 +67,7 @@ resource "aws_guardduty_detector" "this" {
 
 resource "aws_guardduty_detector_feature" "this" {
   for_each = {
-    for feature in try(var.settings.features, []) : feature.name => feature
+    for feature in local.detector_features : feature.name => feature
   }
   detector_id = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
   name        = each.value.name

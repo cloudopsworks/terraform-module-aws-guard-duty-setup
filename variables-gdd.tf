@@ -24,7 +24,9 @@
 #          MapEquals: # (optional) List of tags to include in the scan criteria
 #            - Key: "tag_key"  # Tag key to include in the scan criteria
 #              Value: "tag_value"  # Tag value to include in the scan criteria
-#  features:
+#  features: # (optional) Detector features for THIS account. When omitted and organization.enabled is true, they are inherited from organization.features
+#             #   (auto_enable ALL/NEW -> ENABLED, NONE -> DISABLED), because organization auto-enable never applies to the delegated administrator itself.
+#             #   Set features: [] to opt out of the inheritance.
 #    - name: "feature_name"  # Name of the feature
 #      enabled: true | false  # Whether the feature is enabled
 #      additional_configurations:
@@ -36,7 +38,7 @@
 #    account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account
 #    enabled: true | false  # Whether to enable Guard Duty for the organization.
 #    auto_enable: ALL | NONE | NEW # Auto-enable Guard Duty for new accounts in the organization
-#    features:
+#    features: # (optional) Auto-enable settings for MEMBER accounts; also inherited by the administrator detector when settings.features is omitted
 #      - name: "org_feature_name"  # Name of the organization feature
 #        auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
 #        additional_configurations:
