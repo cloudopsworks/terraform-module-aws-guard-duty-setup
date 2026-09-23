@@ -11,9 +11,9 @@
 #settings:
 #  enabled: true | false  # Whether to enable Guard Duty
 #  finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
-#  malware_protection: # (optional) Malware protection settings
-#    ebs_snapshot_preservation: true | false  # Whether to preserve EBS snapshots for malware protection
-#    scan_criteria:
+#  malware_protection: # (optional) EBS malware scan settings of the detector, applied through the AWS CLI only when ebs_snapshot_preservation or scan_criteria is set
+#    ebs_snapshot_preservation: true | false  # (optional) true -> RETENTION_WITH_FINDING, false -> NO_RETENTION, default is unset (settings left untouched)
+#    scan_criteria: # (optional) EC2 tag criteria that select the instances to scan, default is {}. Removing it later does not clear criteria already applied.
 #      Include:
 #        EC2_INSTANCE_TAG:
 #          MapEquals: # (optional) List of tags to include in the scan criteria

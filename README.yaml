@@ -80,14 +80,28 @@ usage: |-
   the `encryption` block. They are still honoured as fallbacks when the corresponding `encryption.*` key is absent,
   so existing deployments keep working unchanged.
 
+  ### EBS malware scan settings
+  The AWS provider has no resource for the detector's malware scan settings
+  ([hashicorp/terraform-provider-aws#33979](https://github.com/hashicorp/terraform-provider-aws/issues/33979)),
+  so `settings.malware_protection.ebs_snapshot_preservation` and `settings.malware_protection.scan_criteria` are
+  applied with `aws guardduty update-malware-scan-settings` from a `terraform_data` resource:
+
+  | Aspect | Behaviour |
+  |--------|-----------|
+  | When it runs | Only when `ebs_snapshot_preservation` or `scan_criteria` is set, on first apply and again whenever the detector, region or either value changes. |
+  | Detector | The effective detector, module-created or adopted through `detector.enabled: false`, so it also covers the auto-created detector of the delegated administrator. |
+  | Requirements | The AWS CLI v2 must be on the `PATH` of the machine running Terragrunt, with credentials for the **same account** the AWS provider targets. The region is passed explicitly. |
+  | Failures | A CLI error fails the apply; nothing is ignored silently. |
+  | Removal | Removing the keys stops managing the settings, it does not reset them in AWS. |
+
   ### Module inputs
   ```yaml
   settings:
     enabled: true | false  # Whether to enable Guard Duty
     finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
-    malware_protection: # (optional) Malware protection settings
-      ebs_snapshot_preservation: true | false  # Whether to preserve EBS snapshots for malware protection
-      scan_criteria:
+    malware_protection: # (optional) EBS malware scan settings of the detector, applied through the AWS CLI only when ebs_snapshot_preservation or scan_criteria is set
+      ebs_snapshot_preservation: true | false  # (optional) true -> RETENTION_WITH_FINDING, false -> NO_RETENTION, default is unset (settings left untouched)
+      scan_criteria: # (optional) EC2 tag criteria that select the instances to scan, default is {}. Removing it later does not clear criteria already applied.
         Include:
           EC2_INSTANCE_TAG:
             MapEquals: # (optional) List of tags to include in the scan criteria

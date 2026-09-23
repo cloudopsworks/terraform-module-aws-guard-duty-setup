@@ -8,12 +8,14 @@
 #
 
 locals {
-  snapshot_preservation      = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
-  scan_resource_criteria_obj = try(var.settings.malware_protection.scan_criteria, {})
-  scan_resource_criteria = length(local.scan_resource_criteria_obj) > 0 ? {
-    SCAN_PARAM = "--scan-resource-criteria"
-    SCAN_VALUE = jsonencode(local.scan_resource_criteria_obj)
-  } : {}
+  snapshot_preservation  = try(var.settings.malware_protection.ebs_snapshot_preservation, false) ? "RETENTION_WITH_FINDING" : "NO_RETENTION"
+  scan_resource_criteria = try(var.settings.malware_protection.scan_criteria, {})
+  # The AWS provider has no resource for UpdateMalwareScanSettings (hashicorp/terraform-provider-aws#33979),
+  # so the settings are applied through the AWS CLI, and only when the operator configures them.
+  malware_scan_settings_enabled = (
+    try(var.settings.malware_protection.ebs_snapshot_preservation, null) != null ||
+    length(local.scan_resource_criteria) > 0
+  )
   detectors = {
     for detector in data.aws_guardduty_detector.existing : detector.id => detector
   }
@@ -52,16 +54,35 @@ resource "aws_guardduty_detector" "this" {
   enable                       = try(var.settings.enabled, true)
   finding_publishing_frequency = try(var.settings.finding_publishing_frequency, null)
   tags                         = local.all_tags
+}
+
+# Runs against the effective detector (created or adopted) and re-runs whenever the settings change.
+resource "terraform_data" "malware_scan_settings" {
+  count = local.malware_scan_settings_enabled ? 1 : 0
+  triggers_replace = {
+    detector_id            = try(var.settings.detector.enabled, true) ? aws_guardduty_detector.this[0].id : data.aws_guardduty_detector.existing[0].id
+    region                 = data.aws_region.current.region
+    snapshot_preservation  = local.snapshot_preservation
+    scan_resource_criteria = length(local.scan_resource_criteria) > 0 ? jsonencode(local.scan_resource_criteria) : ""
+  }
 
   provisioner "local-exec" {
-    command = "aws guardduty update-malware-scan-settings --detector-id ${self.id} --ebs-snapshot-preservation $PRESERVATION $SCAN_PARAM $SCAN_VALUE"
+    command = <<-EOT
+      set -e
+      if [ -n "$SCAN_RESOURCE_CRITERIA" ]; then
+        aws guardduty update-malware-scan-settings --region "$REGION" --detector-id "$DETECTOR_ID" \
+          --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION" --scan-resource-criteria "$SCAN_RESOURCE_CRITERIA"
+      else
+        aws guardduty update-malware-scan-settings --region "$REGION" --detector-id "$DETECTOR_ID" \
+          --ebs-snapshot-preservation "$SNAPSHOT_PRESERVATION"
+      fi
+    EOT
     environment = {
-      PRESERVATION = local.snapshot_preservation
-      SCAN_PARAM   = lookup(local.scan_resource_criteria, "SCAN_PARAM", "")
-      SCAN_VALUE   = lookup(local.scan_resource_criteria, "SCAN_VALUE", "")
+      REGION                 = self.triggers_replace.region
+      DETECTOR_ID            = self.triggers_replace.detector_id
+      SNAPSHOT_PRESERVATION  = self.triggers_replace.snapshot_preservation
+      SCAN_RESOURCE_CRITERIA = self.triggers_replace.scan_resource_criteria
     }
-    on_failure = continue
-    when       = create
   }
 }
 
