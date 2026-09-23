@@ -12,12 +12,12 @@
 
 # Terraform AWS Guard Duty Setup Module
 
+ [![Latest Release](https://img.shields.io/github/release/cloudopsworks/terraform-module-aws-guard-duty-setup.svg?style=for-the-badge)](https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup/releases/latest) [![Last Updated](https://img.shields.io/github/last-commit/cloudopsworks/terraform-module-aws-guard-duty-setup.svg?style=for-the-badge)](https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup/commits)
 
 
-
-AWS GuardDuty setup module that provides organization-wide threat detection monitoring. 
-Supports delegated administration, publishing destinations, and feature configurations.
-Includes S3 bucket setup for findings with KMS encryption (module-managed or bring-your-own key) and lifecycle management.
+AWS GuardDuty setup module for single accounts and AWS Organizations. It covers the detector and its protection
+plans, delegated administration, organization auto-enable, Malware Protection (EBS scan settings and S3 plans),
+findings filters, and export of findings to a KMS-encrypted S3 bucket with lifecycle management.
 
 
 ---
@@ -47,12 +47,25 @@ We have [*lots of terraform modules*][terraform_modules] that are Open Source an
 
 ## Introduction
 
-This module enables AWS GuardDuty across your AWS organization with support for:
-- Organization-wide deployment with delegated administration
-- Customizable detector features and configurations
-- Secure findings storage in S3 with KMS encryption
-- Automated member account enrollment
-- Publishing destination setup for centralized logging
+One module, deployed once per account and region, covers every role an account plays in a GuardDuty rollout:
+
+| Capability | Resources |
+|------------|-----------|
+| Detector | `aws_guardduty_detector`, created by the module or adopted (looked up and imported) with `detector.enabled: false` |
+| Protection plans | `aws_guardduty_detector_feature` for this account's own detector, including runtime monitoring agent management |
+| Organizations | Delegated administrator designation, organization auto-enable for member accounts and per-feature auto-enable |
+| Delegated administrator | Its own detector inherits the organization protection plans, since organization auto-enable only reaches member accounts |
+| Malware Protection | EBS malware scan settings (snapshot retention, EC2 tag criteria) and Malware Protection for S3 plans with their IAM role |
+| Findings filters | `aws_guardduty_filter` with archive / no-op actions and criteria |
+| Findings export | S3 bucket with lifecycle expiration, module-managed or existing KMS key, and the GuardDuty publishing destination |
+
+### Requirements
+
+| Requirement | Notes |
+|-------------|-------|
+| Terraform / OpenTofu `>= 1.7` | The detector adoption uses an `import` block with `for_each`. |
+| AWS provider `~> 6.35` | |
+| AWS CLI v2 and `/bin/sh` | Only when `malware_protection.ebs_snapshot_preservation` or `scan_criteria` is set. See [EBS malware scan settings](#ebs-malware-scan-settings). |
 
 ## Usage
 
@@ -61,39 +74,213 @@ This module enables AWS GuardDuty across your AWS organization with support for:
 Instead pin to the release tag (e.g. `?ref=vX.Y.Z`) of one of our [latest releases](https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup/releases).
 
 
+## Scaffold a new deployment
+
+Create the deployment directory inside your Terragrunt hierarchy and scaffold the module into it.
+Scaffold renders `.boilerplate/` from this repository into the current directory.
+
+```sh
+# 1. Create and enter the target deployment directory
+mkdir -p <environment>/<region>/<spoke>/guardduty
+cd <environment>/<region>/<spoke>/guardduty
+
+# 2. Scaffold the module (do NOT use --working-dir)
+terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-guard-duty-setup
+
+# 3. Edit inputs.yaml with deployment-specific values
+#    (all keys and comments are pre-populated from .boilerplate/inputs.yaml)
+vi inputs.yaml
+
+# 4. Plan and apply
+terragrunt plan
+terragrunt apply
+```
+
+Scaffold asks for:
+
+| Prompt | Type | Default | Description |
+|--------|------|---------|-------------|
+| `is_hub` | bool | `false` | Whether the deployment is a hub configuration. Set `true` in the delegated administrator account. |
+| `tags` | map | `{}` | Tags written to `local-tags.json` |
+
+and writes three files: `terragrunt.hcl`, `inputs.yaml`, and `local-tags.json`.
+
+## Deployment roles
+
+Which resources the module manages depends on `is_hub` and `settings.organization`:
+
+| Account | `is_hub` | Key settings | Managed by the module |
+|---------|----------|--------------|-----------------------|
+| Organizations management account | `false` | `organization.delegated: true`, `organization.administrator_account_id` | Delegated administrator designation only, no detector |
+| Delegated administrator | `true` | `detector.enabled: false`, `organization.enabled: true`, `organization.features` | Adopted detector, its own features, organization configuration and features, filters, publishing destination, Malware Protection |
+| Standalone account | `false` | `features`, optionally `filters`, `malware_protection`, `publishing_destination` | Detector, features, filters, publishing destination, Malware Protection |
+| Organization member account | `false` | `organization.delegated: true` | Nothing, the delegated administrator enrols it. Do not deploy the module there. |
+
+Designating a delegated administrator makes AWS create a detector in that account for the current region.
+Deploy the administrator with `detector.enabled: false` so the module looks that detector up and imports it
+instead of trying to create a second one.
+
+## Generated `inputs.yaml`
+
+`is_hub`, `spoke_def`, `org` and `extra_tags` are supplied by the Terragrunt hierarchy (`spoke-inputs.yaml`,
+`env-inputs.yaml` and the merged tag files) and are **not** set in `inputs.yaml`.
+
+```yaml
+# Module configuration
+#
+# Per-deployment inputs for terraform-module-aws-guard-duty-setup.
+# Loaded by terragrunt.hcl as local.local_vars.
+# is_hub, spoke_def, org and extra_tags are supplied by the Terragrunt hierarchy and must not be set here.
+#
+# Typical deployment layout (one deployment per account and region):
+#   - Organizations management account (is_hub: false): settings.organization.delegated = true + administrator_account_id
+#   - Delegated administrator account   (is_hub: true):  settings.detector.enabled = false (adopt the auto-created detector),
+#                                                         settings.organization.enabled = true + organization.features
+#   - Standalone account                (is_hub: false): settings.features, settings.filters, settings.malware_protection as needed
+
+# (Optional) GuardDuty configuration settings. Default: {}
+# Uncomment "settings:" together with the keys you need; a bare "settings:" with no keys evaluates to null.
+#settings:
+  #enabled: true                                 # (Optional) Enable the GuardDuty detector. Default: true.
+  #finding_publishing_frequency: "SIX_HOURS"     # (Optional) Valid values: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS". Default: AWS default ("SIX_HOURS").
+  #detector:                                     # (Optional) Detector ownership. Default: {}.
+  #  enabled: true                               # (Optional) true: the module creates the detector. false: the detector already in this account/region is looked up and imported,
+  #                                              #   e.g. the one AWS auto-creates when the account is designated delegated administrator. Default: true.
+  #features:                                     # (Optional) Detector features of THIS account. When omitted and organization.enabled is true, they are inherited from
+  #                                              #   organization.features (auto_enable ALL/NEW -> ENABLED, NONE -> DISABLED), because organization auto-enable never
+  #                                              #   reaches the delegated administrator itself. Set "features: []" to opt out of the inheritance. Default: inherited or [].
+  #  - name: "RUNTIME_MONITORING"                # (Required) Valid values (AWS API): "S3_DATA_EVENTS" | "EKS_AUDIT_LOGS" | "EBS_MALWARE_PROTECTION" | "RDS_LOGIN_EVENTS" |
+  #                                              #   "EKS_RUNTIME_MONITORING" | "LAMBDA_NETWORK_LOGS" | "RUNTIME_MONITORING" | "AI_PROTECTION".
+  #    enabled: true                             # (Optional) true -> ENABLED, false -> DISABLED. Default: true.
+  #    additional_configurations:                # (Optional) Only for EKS_RUNTIME_MONITORING / RUNTIME_MONITORING. Default: [].
+  #      - name: "EKS_ADDON_MANAGEMENT"          # (Required) Valid values: "EKS_ADDON_MANAGEMENT" | "ECS_FARGATE_AGENT_MANAGEMENT" | "EC2_AGENT_MANAGEMENT".
+  #        enabled: true                         # (Optional) true -> ENABLED, false -> DISABLED. Default: true.
+  #organization:                                 # (Optional) AWS Organizations integration. Default: {} (disabled).
+  #  delegated: false                            # (Optional) Organizations management account only: designate administrator_account_id as the GuardDuty
+  #                                              #   delegated administrator. The module manages no detector in that account. Default: false.
+  #  administrator_account_id: "123456789012"    # (Optional) 12-digit account ID of the delegated administrator, required when delegated is true. Default: "".
+  #  enabled: false                              # (Optional) Delegated administrator account only (is_hub: true): manage the organization configuration. Default: false.
+  #  auto_enable: "ALL"                          # (Optional) Enrolment of member accounts. Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+  #  features:                                   # (Optional) Protection plans auto-enabled for MEMBER accounts, also inherited by the administrator detector when
+  #                                              #   settings.features is omitted. Default: [].
+  #    - name: "RUNTIME_MONITORING"              # (Required) Same valid values as settings.features[].name.
+  #      auto_enable: "ALL"                      # (Optional) Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+  #      additional_configurations:              # (Optional) Default: [].
+  #        - name: "EKS_ADDON_MANAGEMENT"        # (Required) Valid values: "EKS_ADDON_MANAGEMENT" | "ECS_FARGATE_AGENT_MANAGEMENT" | "EC2_AGENT_MANAGEMENT".
+  #          auto_enable: "ALL"                  # (Optional) Valid values: "ALL" | "NEW" | "NONE". Default: "ALL".
+  #malware_protection:                           # (Optional) Malware Protection settings. Default: {}.
+  #  ebs_snapshot_preservation: false            # (Optional) EBS malware scan setting of the detector, true -> RETENTION_WITH_FINDING, false -> NO_RETENTION.
+  #                                              #   Applied through the AWS CLI (see "EBS malware scan settings"). Default: unset, left untouched in AWS.
+  #  scan_criteria:                              # (Optional) EC2 instances selected for EBS malware scans, applied through the AWS CLI. Default: {}, left untouched in AWS.
+  #                                              #   Removing it later does not clear criteria already applied.
+  #    Include:                                  # (Optional) Scan only instances matching these tags.
+  #      EC2_INSTANCE_TAG:                       # (Required) Only valid key: "EC2_INSTANCE_TAG".
+  #        MapEquals:                            # (Required) Tag conditions.
+  #          - Key: "Scan"                       # (Required) Tag key, 1-128 chars, must not start with "aws:".
+  #            Value: "true"                     # (Optional) Tag value, when omitted only the key is matched.
+  #    Exclude:                                  # (Optional) Skip instances matching these tags.
+  #      EC2_INSTANCE_TAG:                       # (Required) Only valid key: "EC2_INSTANCE_TAG".
+  #        MapEquals:                            # (Required) Tag conditions.
+  #          - Key: "SkipMalwareScan"            # (Required) Tag key.
+  #            Value: "true"                     # (Optional) Tag value.
+  #  plans:                                      # (Optional) Malware Protection for S3 plans, one per bucket. Creates the "malware-prot-<system_name>-role" IAM role. Default: [].
+  #    - bucket_name: "my-uploads-bucket"        # (Required) Existing S3 bucket to protect, also the key of the plan.
+  #      object_prefixes:                        # (Optional) Scan only objects under these prefixes. Default: [] (whole bucket).
+  #        - "incoming/"
+  #      tagging_enabled: true                   # (Optional) Tag scanned objects with the scan result. Default: true.
+  #      bucket_kms_key_id: "1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) KMS key ID when the bucket uses SSE-KMS, grants the role kms:Decrypt. Default: unset.
+  #      bucket_kms_key_region: "us-east-1"      # (Optional) Region of bucket_kms_key_id. Default: current region.
+  #      bucket_kms_key_account_id: "123456789012" # (Optional) Account of bucket_kms_key_id. Default: current account.
+  #publishing_destination:                       # (Optional) Export of findings to S3. Default: {} (no export).
+  #  enabled: false                              # (Optional) Create the findings S3 bucket and register it as the publishing destination. Default: false.
+  #  bucket_name: "existing-findings-bucket"     # (Optional) Publish to this existing bucket instead, used when enabled is false. Default: "".
+  #  expiration_days: 90                         # (Optional) Days before exported findings expire in the managed bucket. Default: 90.
+  #  retain_bucket: false                        # (Optional) Keep the bucket and its managed KMS key when enabled is switched to false. Default: false.
+  #  force_destroy: false                        # (Optional) Allow Terraform to delete the bucket while it still holds objects. Default: false.
+  #  encryption:                                 # (Optional) KMS settings. GuardDuty requires a KMS key to export findings to S3. Default: {}.
+  #    enabled: true                             # (Optional) Create a module-managed KMS key. When false and a destination is configured, kms_key_arn or
+  #                                              #   kms_key_alias is required (enforced by validation). Default: true.
+  #    kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) Existing key, used when enabled is false or
+  #                                              #   when publishing to bucket_name. Takes precedence over kms_key_alias. Default: "".
+  #    kms_key_alias: "my-findings-key"          # (Optional) Existing key alias resolved to its ARN, with or without the "alias/" prefix. Default: "".
+  #    deletion_window_days: 30                  # (Optional) Managed key deletion window, valid values 7-30. Default: 30.
+  #    rotation_enabled: true                    # (Optional) Automatic rotation of the managed key. Default: true.
+  #    rotation_period_days: 90                  # (Optional) Rotation period, valid values 90-2560, used when rotation_enabled is true. Default: 90.
+  #    multi_region: false                       # (Optional) Create the managed key as a multi-region primary key. Default: false.
+  #    admin_role: "terraform-access-role"       # (Optional) IAM role name granted full administration of the managed key. Default: "terraform-access-role".
+  #    alias: "alias/guardduty-pd-custom"        # (Optional) Alias of the managed key. Default: "alias/guardduty-pd-<system_name_short>".
+  #    description: "KMS key for GuardDuty publishing destination" # (Optional) Description of the managed key. Default: as shown.
+  #  kms_key_admin_role: "terraform-access-role" # (Deprecated) Use encryption.admin_role. Still honoured as a fallback.
+  #  kms_key_deletion_window: 30                 # (Deprecated) Use encryption.deletion_window_days. Still honoured as a fallback.
+  #  kms_key_arn: "arn:aws:kms:..."              # (Deprecated) Use encryption.kms_key_arn. Still honoured as a fallback.
+  #filters:                                      # (Optional) Findings filters, keyed by name. The filter name is "<key>-<system_name_short>". Default: {}.
+  #  low-severity:
+  #    action: "ARCHIVE"                         # (Optional) Valid values: "ARCHIVE" | "NOOP". Default: "ARCHIVE".
+  #    description: "Archive low severity findings" # (Optional) Default: "Filter for Guard Duty findings - <key>".
+  #    rank: 1                                   # (Optional) Order in which filters are applied, valid values 1-100. Default: 0, which AWS rejects, so set it.
+  #    criteria_list:                            # (Required) Finding criteria, combined with AND.
+  #      - field: "severity"                     # (Required) Finding attribute, e.g. "severity", "type", "resource.resourceType", "updatedAt".
+  #        less_than: 4                          # (Optional) One or more of: equals | not_equals (lists of strings), greater_than | greater_than_or_equal |
+  #                                              #   less_than | less_than_or_equal (number, or RFC 3339 date for date fields).
+```
+
+## Generated `terragrunt.hcl`
+
+Scaffold renders the following file. `inputs.yaml` is loaded as `local.local_vars`; `settings` falls back to
+`{}` through `try()` when the key is absent.
+
 ```hcl
-# terragrunt.hcl
+locals {
+  local_vars  = yamldecode(file("./inputs.yaml"))
+  spoke_vars  = yamldecode(file(find_in_parent_folders("spoke-inputs.yaml")))
+  region_vars = yamldecode(file(find_in_parent_folders("region-inputs.yaml")))
+  env_vars    = yamldecode(file(find_in_parent_folders("env-inputs.yaml")))
+  global_vars = yamldecode(file(find_in_parent_folders("global-inputs.yaml")))
+
+  local_tags  = jsondecode(file("./local-tags.json"))
+  spoke_tags  = jsondecode(file(find_in_parent_folders("spoke-tags.json")))
+  region_tags = jsondecode(file(find_in_parent_folders("region-tags.json")))
+  env_tags    = jsondecode(file(find_in_parent_folders("env-tags.json")))
+  global_tags = jsondecode(file(find_in_parent_folders("global-tags.json")))
+
+  tags = merge(
+    local.global_tags,
+    local.env_tags,
+    local.region_tags,
+    local.spoke_tags,
+    local.local_tags
+  )
+}
+
 include "root" {
-  path = find_in_parent_folders()
+  path = find_in_parent_folders("root.hcl")
 }
 
 terraform {
-  source = "git::https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup.git?ref=v1.0.0"
+  source = "git::https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup.git?ref=v1.1.1"
 }
 
 inputs = {
-  settings = {
-    enabled = true
-    organization = {
-      enabled = true
-      delegated = true
-      administrator_account_id = "123456789012"
-      auto_enable = "ALL"
-    }
-    publishing_destination = {
-      enabled = true
-      expiration_days = 90
-      encryption = {
-        enabled              = true   # module-managed KMS key (default)
-        rotation_enabled     = true
-        rotation_period_days = 90     # 90 day minimum (default)
-        deletion_window_days = 30
-        admin_role           = "terraform-access-role"
-      }
-    }
-  }
+  is_hub     = true
+  org        = local.env_vars.org
+  spoke_def  = local.spoke_vars.spoke
+  settings   = try(local.local_vars.settings, {})
+  extra_tags = local.tags
 }
 ```
+
+## Delegated administrator protection plans
+
+`organization.features` only sets what GuardDuty auto-enables for **member** accounts. The delegated administrator
+is not a member of itself, so its own detector features come from `settings.features`:
+
+| `settings.features` | Administrator detector features |
+|---------------------|---------------------------------|
+| omitted, `organization.enabled: true` | Inherited from `organization.features`: `auto_enable` `ALL` / `NEW` becomes `ENABLED`, `NONE` becomes `DISABLED`, additional configurations included |
+| a list | Exactly that list, it replaces the inheritance |
+| `[]` | None managed by the module |
+
+Verify with `aws guardduty get-detector --detector-id <id>` (`Features` section).
 
 ### Publishing destination encryption
 GuardDuty requires a KMS key to export findings to S3, so the publishing destination is always
@@ -115,133 +302,138 @@ The flat `kms_key_admin_role`, `kms_key_deletion_window` and `kms_key_arn` keys 
 the `encryption` block. They are still honoured as fallbacks when the corresponding `encryption.*` key is absent,
 so existing deployments keep working unchanged.
 
-### Module inputs
-```yaml
-settings:
-  enabled: true | false  # Whether to enable Guard Duty
-  finding_publishing_frequency: "FIFTEEN_MINUTES" | "ONE_HOUR" | "SIX_HOURS" # Frequency of finding publishing
-  malware_protection: # (optional) Malware protection settings
-    ebs_snapshot_preservation: true | false  # Whether to preserve EBS snapshots for malware protection
-    scan_criteria:
-      Include:
-        EC2_INSTANCE_TAG:
-          MapEquals: # (optional) List of tags to include in the scan criteria
-            - Key: "tag_key"  # Tag key to include in the scan criteria
-              Value: "tag_value"  # Tag value to include in the scan criteria
-      Exclude:
-        EC2_INSTANCE_TAG:
-          MapEquals: # (optional) List of tags to include in the scan criteria
-            - Key: "tag_key"  # Tag key to include in the scan criteria
-              Value: "tag_value"  # Tag value to include in the scan criteria
-  features:
-    - name: "feature_name"  # Name of the feature
-      enabled: true | false  # Whether the feature is enabled
-      additional_configurations:
-        - name: "config_name"  # Name of the additional configuration
-          enabled: true | false # Auto-enable setting for the additional configuration
-  organization:
-    delegated: true | false  # Whether to delegate Guard Duty management to the organization administrator account
-    administrator_account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account, can be used only on the Organization Account
-    account_id: "123456789012"  # The AWS account ID of the Guard Duty administrator account
-    enabled: true | false  # Whether to enable Guard Duty for the organization.
-    auto_enable: ALL | NONE | NEW # Auto-enable Guard Duty for new accounts in the organization
-    features:
-      - name: "org_feature_name"  # Name of the organization feature
-        auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
-        additional_configurations:
-          - name: "org_config_name"  # Name of the additional configuration for the organization feature
-            auto_enable: ALL | NONE | NEW # Auto-enable setting for the organization feature
-  malware_protection:
-    plans: # (optional) List of malware protection plans
-      - bucket_name: "my-malware-protection-bucket"  # S3 bucket name for malware protection
-        object_prefixes: # (optional) List of object prefixes for the malware protection bucket
-          - "prefix1"
-          - "prefix2"
-        tagging_enabled: true | false # (optional) Whether to enable tagging for the malware protection bucket, default is true
-        bucket_kms_key_id: "ae853tgjvgyuu43" # (optional) KMS key ID for the malware protection bucket, default is null
-        bucket_kms_key_region: "us-west-2" # (optional) KMS key region for the malware protection bucket, default is current region
-        bucket_kms_key_account_id: "123456789012" # (optional) KMS key account ID for the malware protection bucket, default is is current account
-  publishing_destination:
-    enabled: true | false  # (optional) Create the findings S3 bucket and register it as the publishing destination, default is false
-    bucket_name: "existing-findings-bucket" # (optional) Existing bucket to publish findings to when enabled is false, default is ""
-    expiration_days: 90 # (optional) Number of days after which findings in the publishing destination bucket will expire, default is 90
-    retain_bucket: true | false # (optional) Keep the findings bucket and its managed KMS key when enabled is switched to false, default is false
-    force_destroy: true | false # (optional) Allow Terraform to delete the findings bucket even when it still contains objects, default is false
-    encryption: # (optional) KMS settings for the publishing destination. Only relevant when findings are exported to S3, GuardDuty requires a KMS key for that export.
-      enabled: true | false  # (optional) Create a module-managed KMS key, default is true. Can be false freely when the publishing destination is not enabled; when publishing_destination.enabled is true a key is mandatory (AWS requirement), so kms_key_arn or kms_key_alias must be set.
-      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/..." # (optional) Existing KMS key ARN used when enabled is false or when publishing to an existing bucket, default is "". Takes precedence over kms_key_alias
-      kms_key_alias: "my-findings-key" # (optional) Existing KMS key alias resolved to its ARN, accepted with or without the "alias/" prefix, default is ""
-      deletion_window_days: 30 # (optional) KMS key deletion window in days, valid values 7-30, default is 30
-      rotation_enabled: true | false # (optional) Enable automatic KMS key rotation, default is true
-      rotation_period_days: 90 # (optional) Rotation period in days, only used when rotation_enabled is true, valid values 90-2560, default is 90
-      multi_region: true | false # (optional) Create the KMS key as a multi-region primary key, default is false
-      admin_role: "terraform-access-role" # (optional) IAM role name granted full administration over the KMS key, default is "terraform-access-role"
-      alias: "alias/guardduty-pd-custom" # (optional) KMS alias name, default is "alias/guardduty-pd-<system_name_short>"
-      description: "KMS key for GuardDuty publishing destination" # (optional) KMS key description
-    kms_key_admin_role: "terraform-access-role" # (deprecated) Use encryption.admin_role instead, default is "terraform-access-role"
-    kms_key_deletion_window: 30 # (deprecated) Use encryption.deletion_window_days instead, default is 30
-    kms_key_arn: "arn:aws:kms:..." # (deprecated) Use encryption.kms_key_arn instead, default is ""
-  filters: # (optional) List of filters for Guard Duty findings
-    <filter_name>:
-      action: "NOOP" | "ARCHIVE"  # Action to take on the filter, defaults to "ARCHIVE"
-      description: "Filter description"  # Description of the filter
-      rank: 0  # Rank of the filter, lower numbers are higher priority
-      criteria_list: # List of criteria for the filter
-        - field: "field_name"  # Field to filter on
-          equals: ["value1", "value2"]  # Values to match for the field
-          not_equals: ["value3", "value4"]  # Values to exclude for the field
-          greater_than: 10 | <date> # (optional) Greater than value for numeric fields
-          less_than: 100 | <date> # (optional) Less than value for numeric fields
-          greater_than_or_equal: 10 | <date> # (optional) Greater than or equal value for numeric fields
-          less_than_or_equal: 100 | <date> # (optional) Less than or equal value for numeric fields
-```
+### EBS malware scan settings
+The AWS provider has no resource for the detector's malware scan settings
+([hashicorp/terraform-provider-aws#33979](https://github.com/hashicorp/terraform-provider-aws/issues/33979)),
+so `settings.malware_protection.ebs_snapshot_preservation` and `settings.malware_protection.scan_criteria` are
+applied with `aws guardduty update-malware-scan-settings` from a `terraform_data` resource:
+
+| Aspect | Behaviour |
+|--------|-----------|
+| When it runs | Only when `ebs_snapshot_preservation` or `scan_criteria` is set and a detector is in use, on first apply and again whenever the detector, region or either value changes. |
+| Detector | The effective detector, module-created or adopted through `detector.enabled: false`, so it also covers the auto-created detector of the delegated administrator. |
+| Settings passed | Only the keys that are set. `scan_criteria` alone leaves the snapshot preservation in AWS untouched, and the other way round. |
+| Credentials | The CLI runs outside the provider, starting from the runner's ambient credentials. When those are already the provider's role (any session) or its exact identity, they are used as is. Otherwise the provider's role, resolved with `aws_iam_session_context` (path included), is assumed first, so a Terragrunt `assume_role` provider block works unchanged. The ambient identity must be allowed to assume that role, which it is when it is the identity Terragrunt assumes it from. |
+| Not supported | `assume_role` options beyond `role_arn` (external ID, session tags), and providers configured with an SSO `profile` while the shell holds a different identity. |
+| Permissions | The provider identity needs `iam:GetRole` on its own role (read by `aws_iam_session_context` at plan time) and `guardduty:UpdateMalwareScanSettings`; the ambient identity needs `sts:AssumeRole` on the provider role when it differs. |
+| Requirements | A Unix-like runner (`/bin/sh`) with the AWS CLI v2 on the `PATH`. The region is passed explicitly. |
+| Failures | A CLI error fails the apply; nothing is ignored silently. |
+| Removal | Removing the keys stops managing the settings, it does not reset them in AWS. |
+
+Verify with `aws guardduty get-malware-scan-settings --detector-id <id>`.
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `publishing_destination_bucket_name` / `_arn` | Module-managed findings bucket, `null` when neither `publishing_destination.enabled` nor `retain_bucket` is set |
+| `publishing_destination_kms_key_id` | Module-managed KMS key ID, `null` when the key is external |
+| `publishing_destination_kms_key_arn` | KMS key used by the publishing destination, managed or external |
+| `publishing_destination_kms_key_managed` | Whether the key is created by this module |
 
 ## Quick Start
 
-1. Add the module to your terragrunt.hcl:
-   ```hcl
-   terraform {
-     source = "git::https://github.com/cloudopsworks/terraform-module-aws-guard-duty-setup.git?ref=v1.0.0"
-   }
+1. Scaffold the module into a new deployment directory:
+   ```sh
+   mkdir -p <environment>/<region>/<spoke>/guardduty && cd $_
+   terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-guard-duty-setup
    ```
-2. Configure basic settings:
-   ```hcl
-   inputs = {
-     settings = {
-       enabled = true
-     }
-   }
+2. Pick the settings for the account's [deployment role](#deployment-roles) in `inputs.yaml`, e.g. a standalone account:
+   ```yaml
+   settings:
+     features:
+       - name: "S3_DATA_EVENTS"
+       - name: "EBS_MALWARE_PROTECTION"
    ```
-3. Run terragrunt init and apply
+3. Run `terragrunt plan` and `terragrunt apply`.
 
 
 ## Examples
 
-## Basic Setup
-```hcl
-module "guard_duty" {
-  source = "cloudopsworks/guard-duty-setup/aws"
+All examples are `inputs.yaml` content for a scaffolded deployment.
 
-  settings = {
-    enabled = true
-  }
-}
+## Standalone account
+```yaml
+settings:
+  finding_publishing_frequency: "FIFTEEN_MINUTES"
+  features:
+    - name: "S3_DATA_EVENTS"
+    - name: "EBS_MALWARE_PROTECTION"
+    - name: "RUNTIME_MONITORING"
+      additional_configurations:
+        - name: "EC2_AGENT_MANAGEMENT"
+        - name: "ECS_FARGATE_AGENT_MANAGEMENT"
 ```
 
-## Organization Setup with Delegated Admin
-```hcl
-module "guard_duty" {
-  source = "cloudopsworks/guard-duty-setup/aws"
+## Organizations management account
+Designates the delegated administrator; `is_hub: false`.
+```yaml
+settings:
+  organization:
+    delegated: true
+    administrator_account_id: "123456789012"
+```
 
-  settings = {
-    enabled = true
-    organization = {
-      enabled = true
-      delegated = true
-      administrator_account_id = "123456789012"
-    }
-  }
-}
+## Delegated administrator
+Adopts the detector AWS created on designation, enrols all members and enables the protection plans for the
+members and, through inheritance, for the administrator itself. Scaffold with `is_hub: true`.
+```yaml
+settings:
+  detector:
+    enabled: false
+  organization:
+    enabled: true
+    auto_enable: "ALL"
+    features:
+      - name: "S3_DATA_EVENTS"
+      - name: "EKS_AUDIT_LOGS"
+      - name: "EBS_MALWARE_PROTECTION"
+      - name: "RDS_LOGIN_EVENTS"
+      - name: "LAMBDA_NETWORK_LOGS"
+      - name: "RUNTIME_MONITORING"
+        additional_configurations:
+          - name: "EKS_ADDON_MANAGEMENT"
+          - name: "ECS_FARGATE_AGENT_MANAGEMENT"
+          - name: "EC2_AGENT_MANAGEMENT"
+  malware_protection:
+    ebs_snapshot_preservation: true
+    scan_criteria:
+      Exclude:
+        EC2_INSTANCE_TAG:
+          MapEquals:
+            - Key: "SkipMalwareScan"
+              Value: "true"
+  publishing_destination:
+    enabled: true
+    expiration_days: 365
+  filters:
+    low-severity:
+      action: "ARCHIVE"
+      rank: 1
+      criteria_list:
+        - field: "severity"
+          less_than: 4
+```
+
+## Malware Protection for S3
+```yaml
+settings:
+  malware_protection:
+    plans:
+      - bucket_name: "my-uploads-bucket"
+        object_prefixes:
+          - "incoming/"
+        bucket_kms_key_id: "1234abcd-12ab-34cd-56ef-1234567890ab"
+```
+
+## Publish to an existing bucket and key
+```yaml
+settings:
+  publishing_destination:
+    bucket_name: "central-guardduty-findings"
+    encryption:
+      enabled: false
+      kms_key_alias: "guardduty-findings"
 ```
 
 
@@ -262,14 +454,15 @@ Available targets:
 
 | Name | Version |
 | ---- | ------- |
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.7 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.65.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.35 |
+| <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
@@ -296,6 +489,7 @@ Available targets:
 | [aws_kms_alias.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_alias) | resource |
 | [aws_kms_key.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key) | resource |
 | [aws_kms_key_policy.publishing_destination](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kms_key_policy) | resource |
+| [terraform_data.malware_scan_settings](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_guardduty_detector.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/guardduty_detector) | data source |
 | [aws_iam_policy_document.malware_protection_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
@@ -303,6 +497,7 @@ Available targets:
 | [aws_iam_policy_document.malware_protection_trust_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.publishing_destination_kms_key_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_session_context.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_session_context) | data source |
 | [aws_kms_key.publishing_destination_external](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
