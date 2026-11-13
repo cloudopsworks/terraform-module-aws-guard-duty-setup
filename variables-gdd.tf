@@ -69,7 +69,7 @@
 #      enabled: true                             # (Optional) Create a module-managed KMS key. When false and a destination is configured, kms_key_arn or
 #                                                #   kms_key_alias is required (enforced by validation). Default: true.
 #      kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) Existing key, used when enabled is false or
-#                                                #   when publishing to bucket_name. Takes precedence over kms_key_alias. Default: "".
+#                                                #   publishing to bucket_name, where it is required (enforced by validation). Overrides kms_key_alias. Default: "".
 #      kms_key_alias: "my-findings-key"          # (Optional) Existing key alias resolved to its ARN, with or without the "alias/" prefix. Default: "".
 #      deletion_window_days: 30                  # (Optional) Managed key deletion window, valid values 7-30. Default: 30.
 #      rotation_enabled: true                    # (Optional) Automatic rotation of the managed key. Default: true.
@@ -103,6 +103,22 @@ variable "settings" {
       try(var.settings.publishing_destination.encryption.kms_key_alias, "") != ""
     )
     error_message = "settings.publishing_destination.encryption.kms_key_arn or kms_key_alias is required when settings.publishing_destination.enabled is true and settings.publishing_destination.encryption.enabled is false, GuardDuty requires a KMS key to export findings to S3."
+  }
+
+  # Publishing to an existing bucket (bucket_name with enabled false) never creates a managed
+  # key, unless retain_bucket keeps the module bucket and its key, so an existing key is required.
+  validation {
+    condition = (
+      try(var.settings.publishing_destination.enabled, false) ||
+      try(var.settings.publishing_destination.bucket_name, "") == "" ||
+      try(var.settings.publishing_destination.encryption.kms_key_arn, var.settings.publishing_destination.kms_key_arn, "") != "" ||
+      try(var.settings.publishing_destination.encryption.kms_key_alias, "") != "" ||
+      (
+        try(var.settings.publishing_destination.retain_bucket, false) &&
+        try(var.settings.publishing_destination.encryption.enabled, true)
+      )
+    )
+    error_message = "settings.publishing_destination.encryption.kms_key_arn or kms_key_alias is required when publishing to settings.publishing_destination.bucket_name, GuardDuty requires a KMS key to export findings to S3."
   }
 
   validation {
