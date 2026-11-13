@@ -3,8 +3,7 @@
   ** 
   ** This file was automatically generated. 
   ** 1) Make all changes to `README.yaml` 
-  ** 2) Run `make init` (you only need to do this once)
-  ** 3) Run`make readme` to rebuild this file. 
+  ** 2) Run `tronador readme build` to rebuild this file.
   -->
 [![README Header][readme_header_img]][readme_header_link]
 
@@ -201,7 +200,7 @@ instead of trying to create a second one.
   #    enabled: true                             # (Optional) Create a module-managed KMS key. When false and a destination is configured, kms_key_arn or
   #                                              #   kms_key_alias is required (enforced by validation). Default: true.
   #    kms_key_arn: "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab" # (Optional) Existing key, used when enabled is false or
-  #                                              #   when publishing to bucket_name. Takes precedence over kms_key_alias. Default: "".
+  #                                              #   publishing to bucket_name, where it is required (enforced by validation). Overrides kms_key_alias. Default: "".
   #    kms_key_alias: "my-findings-key"          # (Optional) Existing key alias resolved to its ARN, with or without the "alias/" prefix. Default: "".
   #    deletion_window_days: 30                  # (Optional) Managed key deletion window, valid values 7-30. Default: 30.
   #    rotation_enabled: true                    # (Optional) Automatic rotation of the managed key. Default: true.
@@ -290,6 +289,10 @@ KMS-encrypted. What is optional is whether this module creates and manages that 
 |----------------------|-----------|
 | `true` (default)     | The module creates a customer-managed KMS key, its alias and key policy (GuardDuty `GenerateDataKey*` + `admin_role` full access), and uses it for both the bucket SSE and the publishing destination. |
 | `false`              | No key is created. `encryption.kms_key_arn` (or `encryption.kms_key_alias`, with or without the `alias/` prefix) must point to an existing key whose policy already allows `guardduty.amazonaws.com` to `kms:GenerateDataKey*`. |
+| any, publishing to `bucket_name` | No key is created for an existing bucket, so `encryption.kms_key_arn` or `encryption.kms_key_alias` is required (enforced by validation). |
+
+A module bucket without any KMS key (only possible with `retain_bucket: true`, `enabled: false` and
+`encryption.enabled: false`) defaults to SSE-S3 (`AES256`). Findings are never exported to it in that state.
 
 ### Findings bucket retention
 Switching `publishing_destination.enabled` to `false` removes the GuardDuty publishing destination **and**
