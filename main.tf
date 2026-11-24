@@ -191,6 +191,7 @@ resource "aws_guardduty_filter" "this" {
         less_than             = try(criterion.value.less_than, null)
         greater_than_or_equal = try(criterion.value.greater_than_or_equal, null)
         less_than_or_equal    = try(criterion.value.less_than_or_equal, null)
+        matches               = try(criterion.value.matches, null)
       }
     }
   }
