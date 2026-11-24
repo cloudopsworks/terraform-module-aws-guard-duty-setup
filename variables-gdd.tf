@@ -88,7 +88,7 @@
 #      rank: 1                                   # (Optional) Order in which filters are applied, valid values 1-100. Default: 0, which AWS rejects, so set it.
 #      criteria_list:                            # (Required) Finding criteria, combined with AND.
 #        - field: "severity"                     # (Required) Finding attribute, e.g. "severity", "type", "resource.resourceType", "updatedAt".
-#          less_than: 4                          # (Optional) One or more of: equals | not_equals (lists of strings), greater_than | greater_than_or_equal |
+#          less_than: 4                          # (Optional) One or more of: equals | not_equals | matches (lists of strings), greater_than | greater_than_or_equal |
 #                                                #   less_than | less_than_or_equal (number, or RFC 3339 date for date fields).
 variable "settings" {
   description = "Settings for the Guard Duty configuration"
